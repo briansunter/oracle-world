@@ -48,7 +48,15 @@ oci setup config    # Creates ~/.oci/config with API keys
 
 Upload the generated public key to your OCI profile: **Identity > Users > API Keys**.
 
-### 4. Deploy
+### 4. Generate Secrets
+
+```bash
+./generate-env.sh    # Generates .env with random state encryption passphrase (+ MySQL password if needed)
+```
+
+This creates a `.env` file (gitignored) with `TF_VAR_state_passphrase` for encrypting Terraform state at rest. **Back up this file** — losing the passphrase means losing access to your state.
+
+### 5. Deploy
 
 ```bash
 just setup                                        # Auto-discovers OCI config, generates tfvars
@@ -59,11 +67,11 @@ just apply                                         # Deploy everything
 
 To enable optional modules, add to your `oci-prod.auto.tfvars`:
 ```hcl
-enable_mysql          = true   # Also: export TF_VAR_mysql_admin_password="YourPass123!"
+enable_mysql          = true   # Also needs TF_VAR_mysql_admin_password in .env
 enable_object_storage = true
 ```
 
-### 5. Connect
+### 6. Connect
 
 ```bash
 just ssh-allow       # Open SSH from your current IP
@@ -76,11 +84,12 @@ just mysql-tunnel    # Tunnel MySQL to localhost:3306 (if MySQL enabled)
 <summary>Manual setup (without just)</summary>
 
 ```bash
+./generate-env.sh   # Creates .env with state encryption passphrase (+ MySQL password if needed)
 cd terraform/environments/oci-prod
 cp oci-prod.auto.tfvars.example oci-prod.auto.tfvars
 # Edit oci-prod.auto.tfvars with your values (see table below)
-export TF_VAR_mysql_admin_password="YourPass123!"
-tofu init && tofu plan && tofu apply
+cd ../../..
+just init && just plan && just apply
 ```
 
 | Variable | How to Find |
@@ -165,7 +174,7 @@ enable_high_utilization_alerts = true   # Off by default
 ```hcl
 # MySQL HeatWave — 50 GB Always Free, private subnet, SSH tunnel access
 enable_mysql = true
-# Requires: export TF_VAR_mysql_admin_password="YourPass123!"
+# Requires TF_VAR_mysql_admin_password in .env (run ./generate-env.sh to generate)
 
 # S3-compatible Object Storage — 30 GB auto-tiered bucket
 enable_object_storage = true
@@ -308,15 +317,85 @@ just mysql-tunnel
 
 See [OCI Always Free Resources](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm) for full details.
 
-## State Backend
+## State Security
 
-Local state by default. To use a remote backend, uncomment in `main.tf`:
+State and plan files are **encrypted at rest** using OpenTofu state encryption (AES-GCM + PBKDF2). The passphrase is stored in `.env` (gitignored, `chmod 600`) and loaded automatically by `just` recipes. Run `./generate-env.sh` to generate a random passphrase.
+
+### Local State (Default)
+
+State is stored locally in `terraform.tfstate` (gitignored). This works for solo use but has no locking, versioning, or offsite backup.
+
+### Recommended: Remote State Backend
+
+For durability and collaboration, move state to a remote backend. State encryption works with any backend — it encrypts client-side before storage, so you get **double encryption** (client-side AES-GCM + server-side at rest).
+
+#### Option 1: OCI Object Storage (Recommended for OCI projects)
+
+Uses your existing OCI account with S3-compatible API. State files are tiny (~10-50 KB) so free tier impact is negligible.
 
 ```hcl
-backend "pg"  { schema_name = "oci_prod" }
-backend "s3"  { bucket = "tf-state" ... }
-backend "gcs" { bucket = "tf-state" ... }
+# In main.tf, replace the local backend comment with:
+backend "s3" {
+  bucket                      = "terraform-state"
+  key                         = "oci-prod/terraform.tfstate"
+  region                      = "us-ashburn-1"  # your home region
+  endpoints                   = { s3 = "https://<namespace>.compat.objectstorage.<region>.oraclecloud.com" }
+  skip_region_validation      = true
+  skip_credentials_validation = true
+  skip_requesting_account_id  = true
+  skip_metadata_api_check     = true
+  use_path_style              = true
+}
 ```
+
+You'll need S3-compatible credentials (Customer Secret Key) — the project already creates these when `enable_object_storage = true`. Set `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` in your `.env`.
+
+**Prerequisite:** Create the bucket manually first (chicken-and-egg — Terraform can't create its own state bucket):
+```bash
+oci os bucket create --name terraform-state --compartment-id <compartment_ocid>
+```
+
+Docs: [OCI Object Storage S3 Compatibility](https://docs.oracle.com/en-us/iaas/Content/Object/Tasks/s3compatibleapi.htm) | [OpenTofu S3 Backend](https://opentofu.org/docs/language/settings/backends/s3/)
+
+#### Option 2: Terraform Cloud / HCP Terraform (Easiest)
+
+Free for up to 500 managed resources. Includes state locking, versioning, run history, and a web UI.
+
+```hcl
+cloud {
+  organization = "your-org"
+  workspaces {
+    name = "oci-prod"
+  }
+}
+```
+
+Sign up at [app.terraform.io](https://app.terraform.io) and run `tofu login`.
+
+Docs: [HCP Terraform Free Tier](https://developer.hashicorp.com/terraform/cloud-docs/overview) | [Cloud Backend Config](https://opentofu.org/docs/cli/cloud/settings/)
+
+#### Option 3: PostgreSQL Backend (Self-hosted)
+
+If you run PostgreSQL on the instance or elsewhere. State locking is built-in.
+
+```hcl
+backend "pg" {
+  conn_str    = "postgres://user:pass@hostname/dbname"
+  schema_name = "oci_prod"
+}
+```
+
+Docs: [OpenTofu pg Backend](https://opentofu.org/docs/language/settings/backends/pg/)
+
+#### Migrating to a Remote Backend
+
+After adding the backend block to `main.tf`:
+
+```bash
+just init    # OpenTofu detects the backend change and prompts to migrate state
+```
+
+OpenTofu will copy your local state to the remote backend. Your `.env` passphrase is still needed — state is decrypted locally, sent to the backend, and re-encrypted on read.
 
 ## Important: Offsite Backups Recommended
 

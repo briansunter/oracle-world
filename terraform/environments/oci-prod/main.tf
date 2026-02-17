@@ -22,7 +22,7 @@
 #   tofu apply
 
 terraform {
-  required_version = ">= 1.0"
+  required_version = ">= 1.7"
 
   required_providers {
     oci = {
@@ -31,10 +31,58 @@ terraform {
     }
   }
 
-  # Default to local backend. Override with your preferred backend:
-  #   backend "pg"   { schema_name = "oci_prod" }
-  #   backend "s3"   { ... }
-  #   backend "gcs"  { ... }
+  # State encryption (OpenTofu 1.7+)
+  # Encrypts state and plan files at rest so secrets aren't plaintext on disk.
+  # Set via .env: TF_VAR_state_passphrase="..." (min 16 chars, loaded by `just`)
+  encryption {
+    key_provider "pbkdf2" "main" {
+      passphrase = var.state_passphrase
+    }
+
+    method "aes_gcm" "main" {
+      keys = key_provider.pbkdf2.main
+    }
+
+    state {
+      method   = method.aes_gcm.main
+      enforced = true
+    }
+
+    plan {
+      method   = method.aes_gcm.main
+      enforced = true
+    }
+  }
+
+  # Default: local backend. Recommended: migrate to remote after initial deploy.
+  # Run `just init` after uncommenting to migrate state.
+  #
+  # Option 1: OCI Object Storage (S3-compatible) — stays within OCI
+  # Requires: oci os bucket create --name terraform-state --compartment-id <ocid>
+  # Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in .env
+  #
+  # backend "s3" {
+  #   bucket                      = "terraform-state"
+  #   key                         = "oci-prod/terraform.tfstate"
+  #   region                      = "us-ashburn-1"
+  #   endpoints                   = { s3 = "https://<namespace>.compat.objectstorage.<region>.oraclecloud.com" }
+  #   skip_region_validation      = true
+  #   skip_credentials_validation = true
+  #   skip_requesting_account_id  = true
+  #   skip_metadata_api_check     = true
+  #   use_path_style              = true
+  # }
+  #
+  # Option 2: HCP Terraform (free up to 500 resources)
+  # Run `tofu login` first, then uncomment:
+  #
+  # cloud {
+  #   organization = "your-org"
+  #   workspaces { name = "oci-prod" }
+  # }
+  #
+  # Option 3: PostgreSQL
+  # backend "pg" { conn_str = "postgres://user:pass@host/db" schema_name = "oci_prod" }
 }
 
 # =============================================================================
@@ -162,7 +210,7 @@ resource "terraform_data" "validate_mysql_password" {
   lifecycle {
     precondition {
       condition     = var.mysql_admin_password != ""
-      error_message = "mysql_admin_password is required when enable_mysql = true. Set via: export TF_VAR_mysql_admin_password='YourPassword123!'"
+      error_message = "mysql_admin_password is required when enable_mysql = true. Run ./generate-env.sh --force --mysql to generate one."
     }
   }
 }

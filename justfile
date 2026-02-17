@@ -1,6 +1,8 @@
 # OCI Always Free Tier — Task Runner
 # Usage: just <recipe>   (install: brew install just)
 
+set dotenv-load
+
 env := "terraform/environments/oci-prod"
 
 # List available recipes
@@ -104,7 +106,7 @@ setup:
     echo "  3. just apply"
     echo
     echo "Optional modules (add to $tfvars):"
-    echo "  enable_mysql          = true   # MySQL HeatWave (also: export TF_VAR_mysql_admin_password='...')"
+    echo "  enable_mysql          = true   # MySQL HeatWave (run: ./generate-env.sh --force --mysql)"
     echo "  enable_object_storage = true   # S3-compatible Object Storage"
 
 # Show your current public IP

@@ -6,7 +6,7 @@ allowed-tools: Bash, Read, Write, Edit, Grep, Glob, AskUserQuestion
 
 ## Interactive OCI Setup Wizard
 
-Walk the user through configuring the OCI Always Free tier infrastructure step by step. Ask questions using `AskUserQuestion` to guide choices, then generate `oci-prod.auto.tfvars`.
+Walk the user through configuring the OCI Always Free tier infrastructure step by step. Ask questions using `AskUserQuestion` to guide choices, then generate `.env` (secrets) and `oci-prod.auto.tfvars` (config).
 
 ### Steps
 
@@ -135,7 +135,31 @@ Skip this group if object storage was not enabled.
   - **Disable (default)**: Objects stay in their current tier.
   - **Enable**: Move objects to Archive tier after N days (ask for number of days, default 180). Mention 90-day minimum retention and ~1 hour restore time.
 
-#### Phase 4: Generate Configuration
+#### Phase 4: Generate .env (Secrets)
+
+Run `./generate-env.sh` to create `.env` with random secrets. The script generates all secrets internally — Claude never sees the values.
+
+1. Check if `.env` already exists by running `test -f .env && echo exists || echo missing`.
+
+2. If `.env` already exists:
+   - Tell the user it already exists and will be kept as-is.
+   - Ask if they want to regenerate it (this backs up the old one first).
+   - If yes, run with `--force`. If no, skip to Phase 5.
+
+3. Run the script via Bash with the appropriate flags:
+   ```bash
+   ./generate-env.sh --mysql              # first time, MySQL enabled
+   ./generate-env.sh --no-mysql           # first time, MySQL disabled
+   ./generate-env.sh --force --mysql      # regenerate, MySQL enabled
+   ./generate-env.sh --force --no-mysql   # regenerate, MySQL disabled
+   ```
+   The `--mysql` / `--no-mysql` flag is determined by whether MySQL was enabled in Phase 3.
+
+4. **CRITICAL: Never read, cat, source, or inspect `.env` contents.** A hook blocks this — the secrets must never appear in the conversation.
+
+5. Tell the user: "Your `.env` file has been generated with random secrets. **Back it up** — losing the passphrase means losing access to your Terraform state. The file is gitignored and loaded automatically by `just` recipes."
+
+#### Phase 5: Generate Configuration
 
 1. Check if `terraform/environments/oci-prod/oci-prod.auto.tfvars` already exists. If so, ask whether to overwrite or abort.
 
@@ -163,35 +187,88 @@ Skip this group if object storage was not enabled.
 
 3. Write the file using the Write tool.
 
-#### Phase 5: Next Steps
+#### Phase 6: Next Steps
 
 Show the user what to do next:
 
-1. If MySQL was enabled, set the MySQL password:
-   ```
-   export TF_VAR_mysql_admin_password="YourSecurePassword123!"
-   ```
-   Remind them: 8-32 characters, must include uppercase, lowercase, number, and special character.
-   Skip this step if MySQL is disabled.
-
-2. Initialize and deploy:
+1. Initialize and deploy:
    ```
    just init
    just plan
    just apply
    ```
 
-3. After deployment:
+2. After deployment:
    - `just ssh-allow` to open SSH from their current IP
    - `just ssh` to connect
-   - If block volume enabled: mount instructions
+   - If block volume enabled: mount instructions (`sudo mkfs.ext4 /dev/oracleoci/oraclevdb && sudo mount /dev/oracleoci/oraclevdb /data`)
    - If MySQL enabled: `just mysql-tunnel` for MySQL access
+
+3. Remind them to back up `.env` — losing the passphrase means losing access to Terraform state.
+
+4. **Recommend setting up a remote state backend** for locking, versioning, and offsite backup. Present three options using `AskUserQuestion`:
+
+   - **OCI Object Storage (Recommended)**: Uses your existing OCI account with S3-compatible API. Free tier impact is negligible (~10-50 KB state files). Requires creating a bucket first, then adding an `s3` backend block to `main.tf`.
+   - **HCP Terraform / Terraform Cloud**: Free up to 500 managed resources. Includes locking, versioning, run history, and a web UI. Just run `tofu login` and add a `cloud {}` block.
+   - **Skip for now**: Keep local state. Can migrate later.
+
+   If the user chooses **OCI Object Storage**:
+   1. Create the state bucket (must exist before backend migration):
+      ```bash
+      oci os bucket create --name terraform-state --compartment-id <compartment_ocid>
+      ```
+   2. Get the namespace:
+      ```bash
+      oci os ns get --query 'data' --raw-output
+      ```
+   3. If `enable_object_storage = true`, the S3 credentials (Customer Secret Key) are already created — get the access key ID:
+      ```bash
+      just output | grep s3_access_key_id
+      ```
+      The secret key was shown once at creation; if lost, a new one must be created.
+      If `enable_object_storage = false`, the user needs to create S3 credentials manually in the OCI Console under Identity > Users > Customer Secret Keys.
+   4. Add `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` to `.env` — run a command like:
+      ```bash
+      echo 'AWS_ACCESS_KEY_ID="<access_key>"' >> .env
+      echo 'AWS_SECRET_ACCESS_KEY="<secret_key>"' >> .env
+      ```
+      **Do NOT read `.env` after writing.** Let the user paste their own values.
+   5. Update the backend block in `main.tf` (use Edit tool):
+      ```hcl
+      backend "s3" {
+        bucket                      = "terraform-state"
+        key                         = "oci-prod/terraform.tfstate"
+        region                      = "<region>"
+        endpoints                   = { s3 = "https://<namespace>.compat.objectstorage.<region>.oraclecloud.com" }
+        skip_region_validation      = true
+        skip_credentials_validation = true
+        skip_requesting_account_id  = true
+        skip_metadata_api_check     = true
+        use_path_style              = true
+      }
+      ```
+   6. Run `just init` — OpenTofu will detect the backend change and prompt to migrate state.
+
+   If the user chooses **HCP Terraform**:
+   1. Direct them to sign up at https://app.terraform.io
+   2. Run `tofu login`
+   3. Update `main.tf` with a `cloud {}` block (use Edit tool):
+      ```hcl
+      cloud {
+        organization = "<their-org>"
+        workspaces {
+          name = "oci-prod"
+        }
+      }
+      ```
+   4. Run `just init` to migrate.
 
 Ask if they'd like to proceed with `just init` now or do it later.
 
 ### Notes
 
 - Use `tofu` for all commands (not `terraform`) per project convention.
-- Never write `TF_VAR_mysql_admin_password` to any file — it must stay as an environment variable.
+- Secrets (`TF_VAR_state_passphrase`, `TF_VAR_mysql_admin_password`) go in `.env` — never in `.auto.tfvars` or committed files. The `.env` file is gitignored and loaded automatically by `just` via `set dotenv-load`.
+- **Never read, cat, source, or inspect `.env` contents.** A `PreToolUse` hook (`.claude/hooks/protect-env.sh`) blocks access. All secret generation is handled by `./generate-env.sh` — Claude calls it but never sees the values.
 - The generated tfvars should be clean and well-commented, matching the style of `oci-prod.auto.tfvars.example`.
 - If the user's OCI account is a trial (not upgraded to Pay As You Go), warn them that ARM instances may fail to create due to capacity limits — recommend upgrading to PAYG (still free for Always Free resources).

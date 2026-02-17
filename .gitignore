@@ -8,6 +8,8 @@ crash.*.log
 # Sensitive values
 *.auto.tfvars
 !*.auto.tfvars.example
+.env
+.env.bak.*
 
 # Nix / direnv
 .direnv/

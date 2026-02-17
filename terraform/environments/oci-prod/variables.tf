@@ -289,3 +289,18 @@ variable "budget_amount" {
   default     = 0
 }
 
+# =============================================================================
+# State Encryption
+# =============================================================================
+
+variable "state_passphrase" {
+  description = "Passphrase for encrypting state files at rest (set via TF_VAR_state_passphrase env var, min 16 chars)"
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = length(var.state_passphrase) >= 16
+    error_message = "state_passphrase must be at least 16 characters. Run ./generate-env.sh to generate one."
+  }
+}
+

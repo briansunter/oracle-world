@@ -76,6 +76,12 @@ ssh_public_key = ""
 # memory_high_threshold = 90
 
 # =============================================================================
+# State Encryption
+# =============================================================================
+# Set TF_VAR_state_passphrase in .env (loaded by `just` recipes).
+# See .env.example for setup. Do NOT put the passphrase in this file.
+
+# =============================================================================
 # SSH Access
 # =============================================================================
 # SSH (port 22) is blocked by default. Set to your residential IP to enable.
