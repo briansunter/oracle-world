@@ -264,8 +264,9 @@ variable "memory_high_threshold" {
 # =============================================================================
 
 variable "alert_email" {
-  description = "Email address for budget and cost alerts"
+  description = "Email address for budget and monitoring alerts (required when alerts are enabled)"
   type        = string
+  default     = ""
 }
 
 variable "budget_amount" {

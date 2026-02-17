@@ -259,7 +259,7 @@ output "next_steps" {
     ├──────────────────────────────────────────────────────────────────────┤
     │ Idle Reclaim: Oracle stops instances when ALL hold over 7 days:    │
     │   CPU 95th pctl < 20% AND Network < 20% AND Memory < 20% (A1)     │
-    │ Monitoring: ${format("%-55s", length(module.monitoring) > 0 ? "${module.monitoring[0].alarm_count} alarms active (email: ${var.alert_email})" : "disabled (set enable_idle_alerts = true)")}│
+    │ Monitoring: ${format("%-55s", length(module.monitoring) > 0 ? "${module.monitoring[0].alarm_count} alarms active (email: ${var.alert_email})" : "disabled (set enable_idle_alerts + alert_email)")}│
     └──────────────────────────────────────────────────────────────────────┘
 
   EOT
@@ -304,22 +304,22 @@ output "monitoring_summary" {
 
 output "budget_id" {
   description = "OCID of the budget"
-  value       = module.budget_alerts.budget_id
+  value       = length(module.budget_alerts) > 0 ? module.budget_alerts[0].budget_id : null
 }
 
 output "budget_amount" {
   description = "Budget amount in USD"
-  value       = module.budget_alerts.budget_amount
+  value       = length(module.budget_alerts) > 0 ? module.budget_alerts[0].budget_amount : null
 }
 
 output "budget_alert_count" {
   description = "Number of budget alert rules"
-  value       = module.budget_alerts.alert_count
+  value       = length(module.budget_alerts) > 0 ? module.budget_alerts[0].alert_count : 0
 }
 
 output "budget_summary" {
   description = "Budget alert summary"
-  value       = module.budget_alerts.summary
+  value       = length(module.budget_alerts) > 0 ? module.budget_alerts[0].summary : "Budget alerts disabled (set alert_email to enable)"
 }
 
 # =============================================================================

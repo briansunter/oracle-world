@@ -84,7 +84,7 @@ tofu init && tofu plan && tofu apply
 | `user_ocid` | `grep user ~/.oci/config` |
 | `availability_domain` | `oci iam availability-domain list` |
 | `ssh_public_key` | `cat ~/.ssh/id_ed25519.pub` |
-| `alert_email` | Your email for budget/monitoring alerts |
+| `alert_email` (optional) | Your email for budget/monitoring alerts |
 
 </details>
 
@@ -92,7 +92,7 @@ tofu init && tofu plan && tofu apply
 
 ### Defaults
 
-Everything works out of the box — you only need to provide 5 values (compartment, user, availability domain, SSH key, email). Everything else has a sensible default:
+Everything works out of the box — you only need to provide 4 values (compartment, user, availability domain, SSH key). Everything else has a sensible default:
 
 | Setting | Default | Override |
 |---------|---------|----------|
@@ -104,9 +104,10 @@ Everything works out of the box — you only need to provide 5 values (compartme
 | **SSH** | Blocked (no inbound port 22) | `just ssh-allow` / `ssh_source_cidr` |
 | **MySQL** | HeatWave enabled, 50 GB, private subnet | `mysql_enable_heatwave` |
 | **Object storage** | Auto-tiering, no archive lifecycle | `object_storage_archive_enabled` |
+| **Alert email** | None (optional) | `alert_email` (required for alerts below) |
 | **Idle alerts** | Off | `enable_idle_alerts = true` (recommended) |
 | **High-util alerts** | Off | `enable_high_utilization_alerts = true` |
-| **Budget alerts** | Alert on any charges ($0 threshold) | `budget_amount` |
+| **Budget alerts** | Off (enabled when `alert_email` is set) | `budget_amount` |
 | **Boot backups** | Weekly, 4 retained | — |
 
 The storage split (50 GB boot + 150 GB block) uses the full 200 GB free tier. The block volume at `/data` survives instance recreation. Alternatively, set `boot_volume_size_gb = 200` and `enable_block_volume = false` for simpler single-disk setup.
@@ -141,12 +142,12 @@ Oracle reclaims Always Free instances deemed "idle" when **all** of these hold o
 - Network utilization < 20%
 - Memory utilization < 20% (A1 shapes only)
 
-Enable monitoring alarms that fire after ~4 days of sustained low utilization, giving you ~3 days to act before reclamation:
+Enable monitoring alarms that fire after ~4 days of sustained low utilization, giving you ~3 days to act before reclamation. Requires `alert_email`:
 
 ```hcl
 # In oci-prod.auto.tfvars:
-enable_idle_alerts = true       # Off by default
-alert_email        = "you@example.com"
+alert_email        = "you@example.com"   # Required for any alerts
+enable_idle_alerts = true                # Off by default
 ```
 
 Optional high-utilization alerts warn when CPU or memory exceed 90%:

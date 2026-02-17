@@ -50,7 +50,7 @@ Ask the user the following questions using `AskUserQuestion`. Group related ques
 
 **Question group 1 — Access mode and email:**
 
-- **Alert email**: Ask for their email address for budget and monitoring alerts. This is required.
+- **Alert email**: Ask for their email address for budget and monitoring alerts. This is optional — if provided, budget alerts are automatically created and monitoring alerts can be enabled. If left blank, no alerts are configured.
 
 - **Public or private mode**: Ask whether the instance should be publicly accessible.
   - **Public (default)**: Creates a Network Load Balancer with a stable public IP, opens port 443. Best for web apps, APIs, VPN endpoints.
@@ -62,7 +62,9 @@ Ask the user the following questions using `AskUserQuestion`. Group related ques
   - **50 GB boot + 150 GB block (default)**: Separate data volume at `/data`. Data survives instance recreation.
   - **200 GB boot, no block volume**: Simpler setup, all storage on root. No separate mount needed.
 
-**Question group 3 — Monitoring:**
+**Question group 3 — Monitoring (only if alert email was provided):**
+
+Skip this group if no alert email was provided — monitoring requires an email.
 
 - **Idle detection alerts**: Ask whether to enable reclaim-prevention alerts. Explain that Oracle reclaims Always Free instances that are idle for 7 days (CPU < 20%, memory < 20%, network < 20%). These alarms warn after ~4 days of low utilization.
   - **Enable (recommended)**: Get email warnings before Oracle reclaims the instance.
@@ -99,9 +101,9 @@ Ask the user the following questions using `AskUserQuestion`. Group related ques
    - `user_ocid`
    - `availability_domain`
    - `ssh_public_key`
-   - `alert_email`
 
    Conditionally include (only when different from defaults):
+   - `alert_email` (only if provided)
    - `enable_public_access` (only if `false`)
    - `additional_tcp_ports` (only if not `[443]`)
    - `additional_udp_ports` (only if not empty)

@@ -268,6 +268,17 @@ module "nlb" {
 # These alarms fire early so you can generate load before reclamation.
 # =============================================================================
 
+resource "terraform_data" "validate_alert_email" {
+  count = (var.enable_idle_alerts || var.enable_high_utilization_alerts) ? 1 : 0
+
+  lifecycle {
+    precondition {
+      condition     = var.alert_email != ""
+      error_message = "alert_email is required when enable_idle_alerts or enable_high_utilization_alerts is true."
+    }
+  }
+}
+
 module "monitoring" {
   source = "../../modules/oci-monitoring"
   count  = (var.enable_idle_alerts || var.enable_high_utilization_alerts) ? 1 : 0
@@ -315,6 +326,7 @@ resource "oci_core_volume_backup_policy_assignment" "boot" {
 
 module "budget_alerts" {
   source = "../../modules/oci-budget-alerts"
+  count  = var.alert_email != "" ? 1 : 0
 
   compartment_id = var.compartment_ocid
   budget_name    = "${var.instance_name}-budget"

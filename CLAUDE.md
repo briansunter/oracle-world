@@ -184,7 +184,7 @@ terraform/
 ## Environment Setup
 
 1. Copy `terraform/environments/oci-prod/oci-prod.auto.tfvars.example` → `oci-prod.auto.tfvars`
-2. Fill in required values: `compartment_ocid`, `user_ocid`, `availability_domain`, `ssh_public_key`, `alert_email`
+2. Fill in required values: `compartment_ocid`, `user_ocid`, `availability_domain`, `ssh_public_key` (plus `alert_email` if you want budget/monitoring alerts)
 3. Set `TF_VAR_mysql_admin_password` as an environment variable (8-32 chars, must include uppercase, lowercase, number, special char)
 4. State is local by default; remote backends (pg/s3/gcs) are commented in `main.tf`
 
