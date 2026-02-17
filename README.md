@@ -90,6 +90,27 @@ tofu init && tofu plan && tofu apply
 
 ## Configuration
 
+### Defaults
+
+Everything works out of the box — you only need to provide 5 values (compartment, user, availability domain, SSH key, email). Everything else has a sensible default:
+
+| Setting | Default | Override |
+|---------|---------|----------|
+| **Compute** | 4 OCPUs, 24 GB RAM (ARM) | `ocpus`, `memory_in_gbs` |
+| **OS** | Ubuntu 24.04 Minimal (aarch64) | `operating_system`, `os_version` |
+| **Storage** | 50 GB boot + 150 GB block at `/data` | `boot_volume_size_gb`, `enable_block_volume` |
+| **Public access** | Enabled — NLB + port 443 open | `enable_public_access = false` |
+| **Open ports** | 443/TCP only, no UDP | `additional_tcp_ports`, `additional_udp_ports` |
+| **SSH** | Blocked (no inbound port 22) | `just ssh-allow` / `ssh_source_cidr` |
+| **MySQL** | HeatWave enabled, 50 GB, private subnet | `mysql_enable_heatwave` |
+| **Object storage** | Auto-tiering, no archive lifecycle | `object_storage_archive_enabled` |
+| **Idle alerts** | Off | `enable_idle_alerts = true` (recommended) |
+| **High-util alerts** | Off | `enable_high_utilization_alerts = true` |
+| **Budget alerts** | Alert on any charges ($0 threshold) | `budget_amount` |
+| **Boot backups** | Weekly, 4 retained | — |
+
+The storage split (50 GB boot + 150 GB block) uses the full 200 GB free tier. The block volume at `/data` survives instance recreation. Alternatively, set `boot_volume_size_gb = 200` and `enable_block_volume = false` for simpler single-disk setup.
+
 ### Public vs Private Mode
 
 By default, the instance is **public** (`enable_public_access = true`): a Network Load Balancer with a stable public IP is created and port 443 (HTTPS) is opened through every layer (VCN security list, instance iptables, NLB forwarding).
