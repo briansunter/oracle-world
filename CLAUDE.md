@@ -234,6 +234,7 @@ Slash commands for common operations (defined in `.claude/skills/`):
 
 | Command | Description |
 |---------|-------------|
+| `/setup` | Interactive setup wizard — walks through OCI config with guided questions |
 | `/deploy [plan\|apply\|destroy]` | Deploy or update infrastructure (manual only) |
 | `/ssh [allow\|revoke\|connect\|tunnel]` | Manage SSH access (manual only) |
 | `/status` | Show current infrastructure state and outputs |

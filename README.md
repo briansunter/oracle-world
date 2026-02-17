@@ -15,6 +15,16 @@ Terraform/OpenTofu modules for Oracle Cloud Infrastructure (OCI) Always Free tie
 | **Monitoring** | Idle-detection alarms to prevent instance reclaim (optional) |
 | **Budget Alerts** | Email alerts at 50%/80%/100% thresholds and on any charges |
 
+## Setup with Claude Code
+
+The easiest way to get started. Open [Claude Code](https://docs.anthropic.com/en/docs/claude-code) in this repo and run:
+
+```
+/setup
+```
+
+The interactive wizard checks prerequisites, auto-discovers your OCI config, and walks you through every option — public vs private mode, storage layout, monitoring, ports, and more. It generates your config and tells you exactly what to do next.
+
 ## Quick Start
 
 ### 1. Create an OCI Account
@@ -57,7 +67,8 @@ just mysql-tunnel    # Tunnel MySQL to localhost:3306 (separate terminal)
 just ssh-revoke      # Close SSH when done
 ```
 
-### Manual Setup (without just)
+<details>
+<summary>Manual setup (without just)</summary>
 
 ```bash
 cd terraform/environments/oci-prod
@@ -74,6 +85,8 @@ tofu init && tofu plan && tofu apply
 | `availability_domain` | `oci iam availability-domain list` |
 | `ssh_public_key` | `cat ~/.ssh/id_ed25519.pub` |
 | `alert_email` | Your email for budget/monitoring alerts |
+
+</details>
 
 ## Configuration
 
