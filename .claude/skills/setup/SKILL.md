@@ -10,12 +10,45 @@ Walk the user through configuring the OCI Always Free tier infrastructure step b
 
 ### Steps
 
+#### Phase 0: OCI Account Check
+
+Before checking local tools, ask the user if they already have an Oracle Cloud account:
+
+- **If they don't have an account**, walk them through creating one:
+  1. Direct them to sign up at https://cloud.oracle.com/free
+  2. Explain they'll need: a valid email, a debit/credit card (verification only — no charges)
+  3. **Important**: Tell them to choose their **Home Region** carefully — Always Free resources are only available in the home region and it **cannot be changed later**. Suggest picking the region closest to them or their users.
+  4. Walk them through the sign-up form:
+     - Enter name, email, country
+     - Verify email (check inbox for verification link)
+     - Set password and choose home region
+     - Enter address and phone number
+     - Add payment method (verification hold only, auto-released)
+     - Wait for account provisioning (can take a few minutes)
+  5. After sign-up, **strongly recommend upgrading to Pay As You Go**:
+     - Log into the OCI Console at https://cloud.oracle.com
+     - Click the **hamburger menu** (top-left) > **Billing & Cost Management** > **Upgrade and Pay As You Go**
+     - This is still free for Always Free resources but removes capacity restrictions that often prevent ARM instance creation on trial accounts
+  6. Wait for the user to confirm their account is ready before proceeding.
+
+- **If they already have an account**, ask if it's been upgraded to Pay As You Go. If not, recommend upgrading:
+  - OCI Console > **hamburger menu** (top-left) > **Billing & Cost Management** > **Upgrade and Pay As You Go**
+  - This avoids ARM capacity issues on trial accounts.
+
 #### Phase 1: Prerequisites
 
 1. Check that `oci` CLI is installed (`command -v oci`). If not, tell the user to install it:
    - macOS: `brew install oci-cli`
    - Linux: `bash -c "$(curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh)"`
    - Then run `oci setup config` to create `~/.oci/config`
+   - After `oci setup config` completes, remind them to upload the generated API public key (printed at the end of setup, usually at `~/.oci/oci_api_key_public.pem`) to their OCI profile:
+     1. Go to the OCI Console at https://cloud.oracle.com
+     2. Click the **person icon** (top-right) > **My profile**
+     3. Scroll down to **Resources** > **API keys** (left sidebar)
+     4. Click **Add API key** > **Paste a public key**
+     5. Paste the contents of the public key file (the path is shown at the end of `oci setup config`)
+     6. Click **Add**
+     7. The console will show a config file preview — confirm it matches `~/.oci/config`
 
 2. Check that `~/.oci/config` exists. If not, tell the user to run `oci setup config` and upload the generated public key to their OCI profile under **Identity > Users > API Keys**.
 
@@ -56,7 +89,15 @@ Ask the user the following questions using `AskUserQuestion`. Group related ques
   - **Public (default)**: Creates a Network Load Balancer with a stable public IP, opens port 443. Best for web apps, APIs, VPN endpoints.
   - **Private**: No NLB, no inbound ports. SSH-only access. Best for dev boxes, background workers, SSH-only use.
 
-**Question group 2 — Storage strategy:**
+**Question group 2 — Optional modules and storage:**
+
+- **MySQL**: Ask whether to enable MySQL HeatWave.
+  - **Disable (default)**: No MySQL, no private subnet. Leaner deployment.
+  - **Enable**: Creates a private subnet + Always Free MySQL HeatWave (50 GB). Access via SSH tunnel from the instance.
+
+- **Object Storage**: Ask whether to enable S3-compatible Object Storage.
+  - **Disable (default)**: No bucket or S3 credentials created.
+  - **Enable**: Creates a 30 GB S3-compatible bucket with auto-tiering.
 
 - **Storage layout**: Ask how they want to split their 200 GB free storage.
   - **50 GB boot + 150 GB block (default)**: Separate data volume at `/data`. Data survives instance recreation.
@@ -86,7 +127,9 @@ Skip this group if no alert email was provided — monitoring requires an email.
   - **51820 (WireGuard)**: For VPN use.
   - **Custom**: Let the user specify.
 
-**Question group 5 — Object storage:**
+**Question group 5 — Object storage (only if object storage was enabled):**
+
+Skip this group if object storage was not enabled.
 
 - **Archive lifecycle**: Ask if they want automatic archiving of old objects.
   - **Disable (default)**: Objects stay in their current tier.
@@ -107,11 +150,13 @@ Skip this group if no alert email was provided — monitoring requires an email.
    - `enable_public_access` (only if `false`)
    - `additional_tcp_ports` (only if not `[443]`)
    - `additional_udp_ports` (only if not empty)
+   - `enable_mysql` (only if `true`)
+   - `enable_object_storage` (only if `true`)
    - `enable_block_volume` (only if `false`)
    - `boot_volume_size_gb` (only if not `50`)
    - `enable_idle_alerts` (only if `true`)
    - `enable_high_utilization_alerts` (only if `true`)
-   - `object_storage_archive_enabled` (only if `true`)
+   - `object_storage_archive_enabled` (only if `true` and object storage enabled)
    - `object_storage_archive_days` (only if archive enabled)
 
    Use the same format as `oci-prod.auto.tfvars.example` with section headers and comments explaining each value.
@@ -122,11 +167,12 @@ Skip this group if no alert email was provided — monitoring requires an email.
 
 Show the user what to do next:
 
-1. Set the MySQL password:
+1. If MySQL was enabled, set the MySQL password:
    ```
    export TF_VAR_mysql_admin_password="YourSecurePassword123!"
    ```
    Remind them: 8-32 characters, must include uppercase, lowercase, number, and special character.
+   Skip this step if MySQL is disabled.
 
 2. Initialize and deploy:
    ```
@@ -139,7 +185,7 @@ Show the user what to do next:
    - `just ssh-allow` to open SSH from their current IP
    - `just ssh` to connect
    - If block volume enabled: mount instructions
-   - `just mysql-tunnel` for MySQL access
+   - If MySQL enabled: `just mysql-tunnel` for MySQL access
 
 Ask if they'd like to proceed with `just init` now or do it later.
 

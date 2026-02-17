@@ -14,8 +14,9 @@ variable "compartment_ocid" {
 }
 
 variable "user_ocid" {
-  description = "OCI user OCID (for S3-compatible credentials)"
+  description = "OCI user OCID (required when enable_object_storage = true, for S3-compatible credentials)"
   type        = string
+  default     = ""
   # Find with: grep user ~/.oci/config
 }
 
@@ -141,6 +142,12 @@ variable "block_volume_size_gb" {
 # MySQL Configuration (Always Free Tier)
 # =============================================================================
 
+variable "enable_mysql" {
+  description = "Deploy MySQL HeatWave (creates private subnet and DB system)"
+  type        = bool
+  default     = false
+}
+
 variable "mysql_admin_username" {
   description = "MySQL admin username"
   type        = string
@@ -148,9 +155,10 @@ variable "mysql_admin_username" {
 }
 
 variable "mysql_admin_password" {
-  description = "MySQL admin password (8-32 chars, uppercase, lowercase, number, special char)"
+  description = "MySQL admin password (8-32 chars, uppercase, lowercase, number, special char). Required when enable_mysql = true."
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 variable "mysql_enable_heatwave" {
@@ -172,6 +180,12 @@ variable "mysql_enable_lakehouse" {
 #   - 10 GB InfrequentAccess (warm) - auto-tiered after 30+ days no access
 #   - 10 GB Archive (cold) - lifecycle policy after configured days
 # =============================================================================
+
+variable "enable_object_storage" {
+  description = "Deploy S3-compatible Object Storage bucket with auto-tiering"
+  type        = bool
+  default     = false
+}
 
 variable "object_storage_bucket_name" {
   description = "Name of the Object Storage bucket"

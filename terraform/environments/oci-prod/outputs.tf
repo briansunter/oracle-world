@@ -65,7 +65,7 @@ output "security_list_id" {
 
 output "private_subnet_id" {
   description = "OCID of the private subnet (MySQL)"
-  value       = module.network.private_subnet_id
+  value       = var.enable_mysql ? module.network.private_subnet_id : null
 }
 
 # =============================================================================
@@ -113,37 +113,37 @@ output "summary" {
 
 output "mysql_db_system_id" {
   description = "OCID of the MySQL DB system"
-  value       = module.mysql.db_system_id
+  value       = length(module.mysql) > 0 ? module.mysql[0].db_system_id : null
 }
 
 output "mysql_ip_address" {
   description = "IP address of the MySQL DB system"
-  value       = module.mysql.ip_address
+  value       = length(module.mysql) > 0 ? module.mysql[0].ip_address : null
 }
 
 output "mysql_port" {
   description = "MySQL port"
-  value       = module.mysql.port
+  value       = length(module.mysql) > 0 ? module.mysql[0].port : null
 }
 
 output "mysql_connection_string" {
   description = "MySQL connection string"
-  value       = module.mysql.connection_string
+  value       = length(module.mysql) > 0 ? module.mysql[0].connection_string : null
 }
 
 output "mysql_connection_command" {
   description = "MySQL CLI connection command"
-  value       = module.mysql.connection_command
+  value       = length(module.mysql) > 0 ? module.mysql[0].connection_command : null
 }
 
 output "mysql_heatwave_enabled" {
   description = "Whether HeatWave cluster is enabled"
-  value       = module.mysql.heatwave_enabled
+  value       = length(module.mysql) > 0 ? module.mysql[0].heatwave_enabled : null
 }
 
 output "mysql_summary" {
   description = "Human-readable MySQL summary"
-  value       = module.mysql.summary
+  value       = length(module.mysql) > 0 ? module.mysql[0].summary : "MySQL disabled (set enable_mysql = true to enable)"
 }
 
 # =============================================================================
@@ -152,74 +152,74 @@ output "mysql_summary" {
 
 output "object_storage_bucket_name" {
   description = "Object Storage bucket name"
-  value       = module.object_storage.bucket_name
+  value       = length(module.object_storage) > 0 ? module.object_storage[0].bucket_name : null
 }
 
 output "object_storage_namespace" {
   description = "Object Storage namespace"
-  value       = module.object_storage.namespace
+  value       = length(module.object_storage) > 0 ? module.object_storage[0].namespace : null
 }
 
 output "object_storage_s3_endpoint" {
   description = "S3-compatible endpoint"
-  value       = module.object_storage.s3_endpoint
+  value       = length(module.object_storage) > 0 ? module.object_storage[0].s3_endpoint : null
 }
 
 output "object_storage_cli_upload" {
   description = "OCI CLI upload command"
-  value       = module.object_storage.oci_cli_upload
+  value       = length(module.object_storage) > 0 ? module.object_storage[0].oci_cli_upload : null
 }
 
 output "object_storage_cli_list" {
   description = "OCI CLI list command"
-  value       = module.object_storage.oci_cli_list
+  value       = length(module.object_storage) > 0 ? module.object_storage[0].oci_cli_list : null
 }
 
 output "object_storage_summary" {
   description = "Human-readable Object Storage summary"
-  value       = module.object_storage.summary
+  value       = length(module.object_storage) > 0 ? module.object_storage[0].summary : "Object storage disabled (set enable_object_storage = true to enable)"
 }
 
 # S3-Compatible Credentials
 output "s3_access_key" {
   description = "S3-compatible access key (use as AWS_ACCESS_KEY_ID)"
-  value       = oci_identity_customer_secret_key.s3_access.id
+  value       = length(oci_identity_customer_secret_key.s3_access) > 0 ? oci_identity_customer_secret_key.s3_access[0].id : null
 }
 
 output "s3_secret_key" {
   description = "S3-compatible secret key (use as AWS_SECRET_ACCESS_KEY)"
-  value       = oci_identity_customer_secret_key.s3_access.key
+  value       = length(oci_identity_customer_secret_key.s3_access) > 0 ? oci_identity_customer_secret_key.s3_access[0].key : null
   sensitive   = true
 }
 
 output "s3_endpoint" {
   description = "S3-compatible endpoint URL"
-  value       = "https://${module.object_storage.namespace}.compat.objectstorage.${module.object_storage.region}.oraclecloud.com"
+  value       = length(module.object_storage) > 0 ? "https://${module.object_storage[0].namespace}.compat.objectstorage.${module.object_storage[0].region}.oraclecloud.com" : null
 }
 
 output "s3_config" {
   description = "AWS CLI / S3 configuration"
-  value       = <<-EOT
-    # Add to ~/.aws/credentials:
-    [oci]
-    aws_access_key_id = ${oci_identity_customer_secret_key.s3_access.id}
-    aws_secret_access_key = <run: tofu output -raw s3_secret_key>
-
-    # Add to ~/.aws/config:
-    [profile oci]
-    region = us-east-1
-    s3 =
-        signature_version = s3v4
-        addressing_style = path
-
-    # Required env vars for AWS CLI 2.23.5+:
-    export AWS_REQUEST_CHECKSUM_CALCULATION=when_required
-    export AWS_RESPONSE_CHECKSUM_VALIDATION=when_required
-
-    # Usage:
-    aws s3 ls s3://${module.object_storage.bucket_name} --endpoint-url ${module.object_storage.s3_endpoint} --profile oci
-    aws s3 cp myfile.txt s3://${module.object_storage.bucket_name}/ --endpoint-url ${module.object_storage.s3_endpoint} --profile oci
-  EOT
+  value = length(module.object_storage) > 0 ? join("\n", [
+    "# Add to ~/.aws/credentials:",
+    "[oci]",
+    "aws_access_key_id = ${oci_identity_customer_secret_key.s3_access[0].id}",
+    "aws_secret_access_key = <run: tofu output -raw s3_secret_key>",
+    "",
+    "# Add to ~/.aws/config:",
+    "[profile oci]",
+    "region = us-east-1",
+    "s3 =",
+    "    signature_version = s3v4",
+    "    addressing_style = path",
+    "",
+    "# Required env vars for AWS CLI 2.23.5+:",
+    "export AWS_REQUEST_CHECKSUM_CALCULATION=when_required",
+    "export AWS_RESPONSE_CHECKSUM_VALIDATION=when_required",
+    "",
+    "# Usage:",
+    "aws s3 ls s3://${module.object_storage[0].bucket_name} --endpoint-url ${module.object_storage[0].s3_endpoint} --profile oci",
+    "aws s3 cp myfile.txt s3://${module.object_storage[0].bucket_name}/ --endpoint-url ${module.object_storage[0].s3_endpoint} --profile oci",
+  ]) : null
 }
 
 # =============================================================================
@@ -236,26 +236,16 @@ output "next_steps" {
 
     1. SSH to the instance:
        ssh ubuntu@${module.compute.public_ip}
-
-    2. Connect to MySQL (from the instance via SSH):
-       ssh ubuntu@${module.compute.public_ip} -L 3306:${module.mysql.ip_address}:3306
-       mysql -h 127.0.0.1 -P 3306 -u ${var.mysql_admin_username} -p
-
-    3. Object Storage:
-       Bucket:    ${module.object_storage.bucket_name}
-       Namespace: ${module.object_storage.namespace}
-       Upload:    ${module.object_storage.oci_cli_upload}
-
-    4. S3-compatible endpoint:
-       ${module.object_storage.s3_endpoint}
-
+    ${var.enable_public_access ? "\n    NLB Public IP: ${module.nlb[0].public_ip} (stable — use for DNS/services)" : ""}
+    ${length(module.mysql) > 0 ? "2. Connect to MySQL (from the instance via SSH):\n       ssh ubuntu@${module.compute.public_ip} -L 3306:${module.mysql[0].ip_address}:3306\n       mysql -h 127.0.0.1 -P 3306 -u ${var.mysql_admin_username} -p\n" : ""}
+    ${length(module.object_storage) > 0 ? "Object Storage:\n       Bucket:    ${module.object_storage[0].bucket_name}\n       Namespace: ${module.object_storage[0].namespace}\n       Upload:    ${module.object_storage[0].oci_cli_upload}\n       S3:        ${module.object_storage[0].s3_endpoint}\n" : ""}
     Free Tier Limits:
     ┌──────────────────────────────────────────────────────────────────────┐
     │ Compute: 4 OCPUs, 24 GB RAM (VM.Standard.A1.Flex)                  │
     │ Storage: 200 GB total block storage                                │
-    │ MySQL:   50 GB Always Free HeatWave                                │
-    │ Object:  10 GB Standard + 10 GB Infrequent + 10 GB Archive = 30 GB│
-    │ NLB:     ${format("%-59s", var.enable_public_access ? "1 Network Load Balancer" : "disabled")}│
+    │ MySQL:   ${format("%-56s", length(module.mysql) > 0 ? "50 GB Always Free HeatWave" : "disabled (enable_mysql = true)")}│
+    │ Object:  ${format("%-56s", length(module.object_storage) > 0 ? "30 GB S3-compatible (auto-tiered)" : "disabled (enable_object_storage = true)")}│
+    │ NLB:     ${format("%-56s", var.enable_public_access ? "1 Network Load Balancer" : "disabled")}│
     ├──────────────────────────────────────────────────────────────────────┤
     │ Idle Reclaim: Oracle stops instances when ALL hold over 7 days:    │
     │   CPU 95th pctl < 20% AND Network < 20% AND Memory < 20% (A1)     │

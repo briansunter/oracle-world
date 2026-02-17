@@ -4,16 +4,16 @@ Terraform/OpenTofu modules for Oracle Cloud Infrastructure (OCI) Always Free tie
 
 ## What You Get (All Free)
 
-| Resource | Spec |
-|----------|------|
-| **Compute** | VM.Standard.A1.Flex — 4 OCPUs, 24 GB RAM (ARM) |
-| **Boot Storage** | 50 GB (expandable to 200 GB) + weekly backups |
-| **Block Storage** | 150 GB attached volume |
-| **MySQL** | 50 GB Always Free HeatWave (private subnet) |
-| **Object Storage** | 30 GB S3-compatible (auto-tiered: Standard + Infrequent + Archive) |
-| **Network LB** | Stable public IP for services (when `enable_public_access = true`) |
-| **Monitoring** | Idle-detection alarms to prevent instance reclaim (optional) |
-| **Budget Alerts** | Email alerts at 50%/80%/100% thresholds and on any charges |
+| Resource | Spec | Default |
+|----------|------|---------|
+| **Compute** | VM.Standard.A1.Flex — 4 OCPUs, 24 GB RAM (ARM) | On |
+| **Boot Storage** | 50 GB (expandable to 200 GB) + weekly backups | On |
+| **Block Storage** | 150 GB attached volume | On |
+| **Network LB** | Stable public IP for services | On (when `enable_public_access = true`) |
+| **MySQL** | 50 GB Always Free HeatWave (private subnet) | Off (`enable_mysql`) |
+| **Object Storage** | 30 GB S3-compatible (auto-tiered) | Off (`enable_object_storage`) |
+| **Monitoring** | Idle-detection alarms to prevent instance reclaim | Off (`enable_idle_alerts`) |
+| **Budget Alerts** | Email alerts at 50%/80%/100% thresholds | Off (enabled when `alert_email` set) |
 
 ## Setup with Claude Code
 
@@ -52,10 +52,15 @@ Upload the generated public key to your OCI profile: **Identity > Users > API Ke
 
 ```bash
 just setup                                        # Auto-discovers OCI config, generates tfvars
-export TF_VAR_mysql_admin_password="YourPass123!"  # MySQL password (env var, not in files)
 just init                                          # Download providers
 just plan                                          # Preview changes
 just apply                                         # Deploy everything
+```
+
+To enable optional modules, add to your `oci-prod.auto.tfvars`:
+```hcl
+enable_mysql          = true   # Also: export TF_VAR_mysql_admin_password="YourPass123!"
+enable_object_storage = true
 ```
 
 ### 5. Connect
@@ -63,8 +68,8 @@ just apply                                         # Deploy everything
 ```bash
 just ssh-allow       # Open SSH from your current IP
 just ssh             # Connect to the instance
-just mysql-tunnel    # Tunnel MySQL to localhost:3306 (separate terminal)
 just ssh-revoke      # Close SSH when done
+just mysql-tunnel    # Tunnel MySQL to localhost:3306 (if MySQL enabled)
 ```
 
 <details>
@@ -84,7 +89,6 @@ tofu init && tofu plan && tofu apply
 | `user_ocid` | `grep user ~/.oci/config` |
 | `availability_domain` | `oci iam availability-domain list` |
 | `ssh_public_key` | `cat ~/.ssh/id_ed25519.pub` |
-| `alert_email` (optional) | Your email for budget/monitoring alerts |
 
 </details>
 
@@ -102,15 +106,15 @@ Everything works out of the box — you only need to provide 4 values (compartme
 | **Public access** | Enabled — NLB + port 443 open | `enable_public_access = false` |
 | **Open ports** | 443/TCP only, no UDP | `additional_tcp_ports`, `additional_udp_ports` |
 | **SSH** | Blocked (no inbound port 22) | `just ssh-allow` / `ssh_source_cidr` |
-| **MySQL** | HeatWave enabled, 50 GB, private subnet | `mysql_enable_heatwave` |
-| **Object storage** | Auto-tiering, no archive lifecycle | `object_storage_archive_enabled` |
+| **MySQL** | Off | `enable_mysql = true` |
+| **Object storage** | Off | `enable_object_storage = true` |
 | **Alert email** | None (optional) | `alert_email` (required for alerts below) |
 | **Idle alerts** | Off | `enable_idle_alerts = true` (recommended) |
 | **High-util alerts** | Off | `enable_high_utilization_alerts = true` |
 | **Budget alerts** | Off (enabled when `alert_email` is set) | `budget_amount` |
 | **Boot backups** | Weekly, 4 retained | — |
 
-The storage split (50 GB boot + 150 GB block) uses the full 200 GB free tier. The block volume at `/data` survives instance recreation. Alternatively, set `boot_volume_size_gb = 200` and `enable_block_volume = false` for simpler single-disk setup.
+The default deployment creates compute + block storage + NLB — a lean base you can build on. Enable MySQL and object storage as needed. The storage split (50 GB boot + 150 GB block) uses the full 200 GB free tier. Alternatively, set `boot_volume_size_gb = 200` and `enable_block_volume = false` for simpler single-disk setup.
 
 ### Public vs Private Mode
 
@@ -156,13 +160,24 @@ Optional high-utilization alerts warn when CPU or memory exceed 90%:
 enable_high_utilization_alerts = true   # Off by default
 ```
 
+### Optional Modules
+
+```hcl
+# MySQL HeatWave — 50 GB Always Free, private subnet, SSH tunnel access
+enable_mysql = true
+# Requires: export TF_VAR_mysql_admin_password="YourPass123!"
+
+# S3-compatible Object Storage — 30 GB auto-tiered bucket
+enable_object_storage = true
+```
+
 ### Other Options
 
 ```hcl
 enable_block_volume  = false  # Skip 150 GB block volume (use larger boot volume instead)
 boot_volume_size_gb  = 200    # Use full 200 GB as boot volume
 
-# Object Storage archive lifecycle (disabled by default)
+# Object Storage archive lifecycle (when enable_object_storage = true)
 # Moves objects to Archive tier after N days — 90-day minimum retention, ~1hr restore
 object_storage_archive_enabled = true
 object_storage_archive_days    = 180
@@ -190,7 +205,7 @@ object_storage_archive_days    = 180
 
 | Module | Description |
 |--------|-------------|
-| `oci-network` | VCN, public + private subnets, internet gateway, security lists |
+| `oci-network` | VCN, public subnet, optional private subnet, internet gateway, security lists |
 | `oci-compute` | ARM Flex instance with configurable shape |
 | `oci-storage` | Block volume with attachment |
 | `oci-mysql-heatwave` | Always Free MySQL with optional HeatWave |
@@ -215,9 +230,9 @@ object_storage_archive_days    = 180
 │  │  │  IP)   │   └────┬─────┘                         │  │
 │  │  └────────┘        │                               │  │
 │  └────────────────────┼───────────────────────────────┘  │
-│                       │ :3306                            │
+│                       │ :3306 (optional)                 │
 │  ┌────────────────────┼───────────────────────────────┐  │
-│  │ Private Subnet (10.0.1.0/24) — no internet        │  │
+│  │ Private Subnet — optional (enable_mysql = true)    │  │
 │  │                    ▼                               │  │
 │  │            ┌──────────────┐                        │  │
 │  │            │ MySQL        │                        │  │
@@ -227,8 +242,8 @@ object_storage_archive_days    = 180
 │  └────────────────────────────────────────────────────┘  │
 │                                                          │
 │  ┌──────────────┐  ┌──────────────────────────────────┐  │
-│  │ Block Volume │  │ Object Storage (S3-compatible)   │  │
-│  │ 150 GB       │  │ 30 GB auto-tiered                │  │
+│  │ Block Volume │  │ Object Storage (optional)        │  │
+│  │ 150 GB       │  │ 30 GB S3-compatible              │  │
 │  └──────────────┘  └──────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────┘
 ```
@@ -237,7 +252,7 @@ object_storage_archive_days    = 180
 
 The compute instance lives in a **public subnet** — OCI NAT gateways aren't included in Always Free, so a private-subnet instance couldn't reach the internet for updates. The NLB provides a stable public IP for services that survives instance recreation.
 
-MySQL is isolated in a **private subnet** with no internet gateway route. Access via SSH tunnel from the instance.
+When MySQL is enabled (`enable_mysql = true`), it's isolated in a **private subnet** with no internet gateway route. Access via SSH tunnel from the instance.
 
 **SSH is blocked by default.** Port 22 is not open until you set `ssh_source_cidr` to your IP:
 
@@ -271,7 +286,7 @@ sudo mount /dev/oracleoci/oraclevdb /data
 echo '/dev/oracleoci/oraclevdb /data ext4 defaults,_netdev 0 2' | sudo tee -a /etc/fstab
 ```
 
-**Connect to MySQL** (from a separate terminal):
+**Connect to MySQL** (if `enable_mysql = true`, from a separate terminal):
 
 ```bash
 just mysql-tunnel
@@ -284,8 +299,8 @@ just mysql-tunnel
 |----------|-----------|----------------|
 | ARM Compute (A1.Flex) | 4 OCPUs, 24 GB RAM | 1 instance: 4 OCPUs, 24 GB |
 | Boot + Block Volume | 200 GB combined, 5 backups | 50 GB boot + 150 GB block |
-| Object Storage | 10 GB/tier = 30 GB (paid account) | 1 bucket, auto-tiering |
-| MySQL HeatWave | 1 DB, 50 GB data + 50 GB backup | MySQL.Free shape |
+| Object Storage | 10 GB/tier = 30 GB (paid account) | Off (`enable_object_storage`) |
+| MySQL HeatWave | 1 DB, 50 GB data + 50 GB backup | Off (`enable_mysql`) |
 | Network Load Balancer | 1 NLB | 1 (when public) |
 | Monitoring Alarms | Unlimited | 3 idle + 2 high-util (optional) |
 | Budget Alerts | Unlimited | 4 rules |

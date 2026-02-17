@@ -62,13 +62,9 @@ setup:
         echo "Generate one with: ssh-keygen -t ed25519"
     fi
 
-    # Prompt for alert email
+    # Prompt for alert email (optional)
     echo
-    read -rp "Alert email for budget notifications: " alert_email
-    if [ -z "$alert_email" ]; then
-        echo "Error: alert email is required"
-        exit 1
-    fi
+    read -rp "Alert email for budget/monitoring notifications (optional, press Enter to skip): " alert_email
 
     # Write tfvars
     tfvars="{{env}}/oci-prod.auto.tfvars"
@@ -89,8 +85,12 @@ setup:
     user_ocid           = "$user"
     availability_domain = "$ad"
     ssh_public_key      = "$ssh_key"
-    alert_email         = "$alert_email"
     EOF
+
+    # Add optional alert_email
+    if [ -n "$alert_email" ]; then
+        echo "alert_email         = \"$alert_email\"" >> "$tfvars"
+    fi
 
     # Remove leading whitespace from heredoc
     sed -i.bak 's/^    //' "$tfvars" && rm -f "$tfvars.bak"
@@ -99,10 +99,13 @@ setup:
     echo "Wrote $tfvars"
     echo
     echo "Next steps:"
-    echo "  1. export TF_VAR_mysql_admin_password='YourPassword123!'"
-    echo "  2. just init"
-    echo "  3. just plan"
-    echo "  4. just apply"
+    echo "  1. just init"
+    echo "  2. just plan"
+    echo "  3. just apply"
+    echo
+    echo "Optional modules (add to $tfvars):"
+    echo "  enable_mysql          = true   # MySQL HeatWave (also: export TF_VAR_mysql_admin_password='...')"
+    echo "  enable_object_storage = true   # S3-compatible Object Storage"
 
 # Show your current public IP
 my-ip:
@@ -174,12 +177,16 @@ ssh:
 mysql-tunnel:
     #!/usr/bin/env bash
     set -euo pipefail
-    instance_ip=$(tofu -chdir={{env}} output -raw instance_ip 2>/dev/null) || {
-        echo "Error: could not get instance IP."
+    mysql_ip=$(tofu -chdir={{env}} output -raw mysql_ip_address 2>/dev/null) || {
+        echo "Error: MySQL is not enabled. Set enable_mysql = true in your tfvars."
         exit 1
     }
-    mysql_ip=$(tofu -chdir={{env}} output -raw mysql_ip_address 2>/dev/null) || {
-        echo "Error: could not get MySQL IP."
+    if [ -z "$mysql_ip" ] || [ "$mysql_ip" = "null" ]; then
+        echo "Error: MySQL is not enabled. Set enable_mysql = true in your tfvars."
+        exit 1
+    fi
+    instance_ip=$(tofu -chdir={{env}} output -raw instance_ip 2>/dev/null) || {
+        echo "Error: could not get instance IP."
         exit 1
     }
     echo "MySQL tunnel: localhost:3306 → $mysql_ip:3306 via $instance_ip"

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Terraform/OpenTofu IaC project that provisions a complete Oracle Cloud Infrastructure (OCI) Always Free tier environment: ARM compute, MySQL HeatWave, S3-compatible object storage, network load balancer, utilization monitoring, and budget alerts.
+Terraform/OpenTofu IaC project that provisions an Oracle Cloud Infrastructure (OCI) Always Free tier environment. Default deployment: ARM compute + block storage + NLB. Optional modules: MySQL HeatWave (`enable_mysql`), S3-compatible object storage (`enable_object_storage`), utilization monitoring, and budget alerts.
 
 ## Commands
 
@@ -105,7 +105,7 @@ tofu plan
 tofu apply
 ```
 
-Set MySQL password via environment variable to avoid it in files:
+If MySQL is enabled (`enable_mysql = true`), set password via environment variable:
 ```bash
 export TF_VAR_mysql_admin_password="YourPassword123!"
 ```
@@ -119,9 +119,9 @@ These are the hard limits. This project's defaults are tuned to maximize free re
 | **ARM Compute (A1.Flex)** | 4 OCPUs, 24 GB RAM total (splittable across up to 4 instances) | 1 instance: 4 OCPUs, 24 GB |
 | **AMD Compute (E2.1.Micro)** | 2 instances, 1/8 OCPU + 1 GB each | Not used (shape is selectable) |
 | **Boot + Block Volume** | 200 GB combined, 5 backups | 50 GB boot + 150 GB block = 200 GB |
-| **Object Storage** | 20 GB combined (Always Free account) or 10 GB/tier = 30 GB (paid account) | 1 bucket, auto-tiering enabled |
+| **Object Storage** | 20 GB combined (Always Free account) or 10 GB/tier = 30 GB (paid account) | Off (`enable_object_storage`) |
 | **Object Storage API** | 50,000 requests/month | N/A |
-| **MySQL HeatWave** | 1 DB system, 50 GB data + 50 GB backup | MySQL.Free shape, 50 GB |
+| **MySQL HeatWave** | 1 DB system, 50 GB data + 50 GB backup | Off (`enable_mysql`) |
 | **Network Load Balancer** | 1 NLB | 1 NLB (when `enable_public_access = true`) |
 | **VCN** | 2 VCNs | 1 VCN |
 | **Outbound Data** | 10 TB/month | N/A |
@@ -151,7 +151,7 @@ terraform/
 │       ├── cloud-init.yaml.tftpl  # First-boot config (iptables, SSH, upgrades)
 │       └── *.auto.tfvars  # Local config (gitignored)
 ├── modules/               # Reusable, self-contained modules
-│   ├── oci-network/       # VCN, public + private subnets, internet gateway, security lists
+│   ├── oci-network/       # VCN, public subnet, optional private subnet, internet gateway, security lists
 │   ├── oci-compute/       # ARM VM.Standard.A1.Flex instance
 │   ├── oci-storage/       # Block volume + attachment
 │   ├── oci-mysql-heatwave/# Always Free MySQL with optional HeatWave
@@ -164,11 +164,13 @@ terraform/
 ```
 
 **Key design decisions:**
-- Modules are independent — network and MySQL persist when compute is destroyed/recreated
-- Block storage is conditionally created via `count` (`enable_block_volume` variable)
+- Modules are independent — network persists when compute is destroyed/recreated
+- MySQL (`enable_mysql`, default `false`) and object storage (`enable_object_storage`, default `false`) are optional modules
+- Block storage is conditionally created via `count` (`enable_block_volume` variable, default `true`)
+- Private subnet is only created when `enable_mysql = true`
 - `enable_public_access` (default `true`) is the master switch for public-facing services: when `false`, NLB is not created, no inbound TCP/UDP ports are opened (security list, iptables, NLB all go dark), only SSH via `ssh_source_cidr` remains
 - `additional_tcp_ports` (default `[443]`) and `additional_udp_ports` (default `[]`) customize which ports are open when public access is enabled; same lists feed VCN security list, instance iptables (cloud-init), and NLB forwarding
-- MySQL and object storage have `prevent_destroy` lifecycle rules
+- MySQL and object storage have `prevent_destroy` lifecycle rules (when enabled)
 - NLB sits in front of the compute instance providing a stable public IP that survives instance recreation
 - MySQL is in a private subnet (no internet gateway route) — access via SSH tunnel from the instance
 - Compute stays in the public subnet because OCI NAT gateways are not free tier — a private-subnet instance couldn't reach the internet for updates
@@ -184,9 +186,10 @@ terraform/
 ## Environment Setup
 
 1. Copy `terraform/environments/oci-prod/oci-prod.auto.tfvars.example` → `oci-prod.auto.tfvars`
-2. Fill in required values: `compartment_ocid`, `user_ocid`, `availability_domain`, `ssh_public_key` (plus `alert_email` if you want budget/monitoring alerts)
-3. Set `TF_VAR_mysql_admin_password` as an environment variable (8-32 chars, must include uppercase, lowercase, number, special char)
-4. State is local by default; remote backends (pg/s3/gcs) are commented in `main.tf`
+2. Fill in required values: `compartment_ocid`, `user_ocid`, `availability_domain`, `ssh_public_key`
+3. Optional: set `enable_mysql = true` and `enable_object_storage = true` for those modules
+4. If MySQL enabled: set `TF_VAR_mysql_admin_password` as an environment variable (8-32 chars, must include uppercase, lowercase, number, special char)
+5. State is local by default; remote backends (pg/s3/gcs) are commented in `main.tf`
 
 ## Security Defaults
 
@@ -226,7 +229,7 @@ Cloud-init runs once on creation. Changes require instance recreation (terraform
 After `just apply`:
 
 1. **Mount block volume**: `sudo mkfs.ext4 /dev/oracleoci/oraclevdb && sudo mount /dev/oracleoci/oraclevdb /data` (first time only, add to `/etc/fstab`)
-2. **MySQL access**: `just mysql-tunnel` then connect with `mysql -h 127.0.0.1 -P 3306 -u admin -p`
+2. **MySQL access** (if enabled): `just mysql-tunnel` then connect with `mysql -h 127.0.0.1 -P 3306 -u admin -p`
 
 ## Skills
 

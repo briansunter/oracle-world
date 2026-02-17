@@ -97,6 +97,12 @@ variable "ssh_source_cidr" {
 # Ingress Port Configuration
 # =============================================================================
 
+variable "enable_private_subnet" {
+  description = "Create private subnet (required for MySQL)"
+  type        = bool
+  default     = false
+}
+
 variable "additional_tcp_ports" {
   description = "TCP ports to allow inbound from 0.0.0.0/0 (e.g., [22, 443, 80])"
   type        = list(number)

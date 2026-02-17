@@ -1,11 +1,12 @@
 # OCI Network Module
-# Creates VCN, public + private subnets, internet gateway, route tables, and security lists
+# Creates VCN, public subnet, internet gateway, route tables, and security lists
+# Optionally creates a private subnet (for MySQL) when enable_private_subnet = true
 #
 # This module provides the networking foundation for OCI instances:
 #   - VCN with configurable CIDR
 #   - Public subnet with internet gateway (for compute)
-#   - Private subnet with no internet route (for MySQL)
-#   - Security lists for both subnets
+#   - Optional private subnet with no internet route (for MySQL)
+#   - Security lists for each subnet
 #   - Configurable SSH and TCP/UDP ingress rules
 #
 # Usage:
@@ -178,6 +179,8 @@ resource "oci_core_subnet" "public" {
 # =============================================================================
 
 resource "oci_core_route_table" "private" {
+  count = var.enable_private_subnet ? 1 : 0
+
   compartment_id = var.compartment_id
   vcn_id         = oci_core_vcn.main.id
   display_name   = "${var.vcn_name}-private-rt"
@@ -187,6 +190,8 @@ resource "oci_core_route_table" "private" {
 }
 
 resource "oci_core_security_list" "private" {
+  count = var.enable_private_subnet ? 1 : 0
+
   compartment_id = var.compartment_id
   vcn_id         = oci_core_vcn.main.id
   display_name   = "${var.vcn_name}-private-security-list"
@@ -238,13 +243,15 @@ resource "oci_core_security_list" "private" {
 }
 
 resource "oci_core_subnet" "private" {
+  count = var.enable_private_subnet ? 1 : 0
+
   compartment_id             = var.compartment_id
   vcn_id                     = oci_core_vcn.main.id
   display_name               = "${var.vcn_name}-private-subnet"
   cidr_block                 = var.private_subnet_cidr
   dns_label                  = "db"
-  route_table_id             = oci_core_route_table.private.id
-  security_list_ids          = [oci_core_security_list.private.id]
+  route_table_id             = oci_core_route_table.private[0].id
+  security_list_ids          = [oci_core_security_list.private[0].id]
   prohibit_public_ip_on_vnic = true
 
   freeform_tags = var.tags

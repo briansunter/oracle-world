@@ -37,10 +37,10 @@ output "route_table_id" {
 
 output "private_subnet_id" {
   description = "OCID of the private subnet"
-  value       = oci_core_subnet.private.id
+  value       = var.enable_private_subnet ? oci_core_subnet.private[0].id : null
 }
 
 output "private_subnet_cidr" {
   description = "CIDR block of the private subnet"
-  value       = oci_core_subnet.private.cidr_block
+  value       = var.enable_private_subnet ? oci_core_subnet.private[0].cidr_block : null
 }

@@ -23,6 +23,17 @@ availability_domain = ""
 ssh_public_key = ""
 
 # =============================================================================
+# Optional Modules (all off by default except compute + block storage)
+# =============================================================================
+
+# MySQL HeatWave — Always Free, 50 GB. Creates a private subnet.
+# Requires TF_VAR_mysql_admin_password env var when enabled.
+# enable_mysql = true
+
+# S3-compatible Object Storage — 30 GB auto-tiered bucket.
+# enable_object_storage = true
+
+# =============================================================================
 # Optional Overrides (defaults in variables.tf)
 # =============================================================================
 
@@ -34,7 +45,7 @@ ssh_public_key = ""
 # boot_volume_size_gb = 200
 # enable_block_volume = false
 
-# Object Storage: auto-archive lifecycle (disabled by default)
+# Object Storage: auto-archive lifecycle (disabled by default, only when enable_object_storage = true)
 # Moves objects to Archive tier after N days (90-day minimum retention, ~1hr restore)
 # object_storage_archive_enabled = false
 # object_storage_archive_days    = 180
@@ -102,7 +113,7 @@ ssh_public_key = ""
 # additional_udp_ports = [51820]
 
 # =============================================================================
-# Network — Private Subnet
+# Network — Private Subnet (only when enable_mysql = true)
 # =============================================================================
 # MySQL lives in a private subnet with no internet access.
 # Override the CIDR if 10.0.1.0/24 conflicts with your network.

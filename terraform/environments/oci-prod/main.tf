@@ -1,13 +1,16 @@
 # OCI Always Free Tier Infrastructure
 #
-# Deploys a complete OCI Always Free environment:
-#   - Network: VCN, subnet, internet gateway, security list
+# Default deployment (lean):
+#   - Network: VCN, public subnet, internet gateway, security list
 #   - Compute: VM.Standard.A1.Flex ARM instance (4 OCPUs, 24 GB RAM)
 #   - Storage: 50 GB boot volume + 150 GB block volume
-#   - MySQL: Always Free HeatWave cluster
-#   - Object Storage: S3-compatible bucket with auto-tiering
-#   - Monitoring: Idle-detection alarms (reclaim prevention) + optional high-utilization
-#   - Budget: Free tier monitoring alerts
+#   - NLB: Network Load Balancer with stable public IP (when enable_public_access = true)
+#
+# Optional modules (off by default):
+#   - MySQL: Always Free HeatWave cluster (enable_mysql = true)
+#   - Object Storage: S3-compatible bucket with auto-tiering (enable_object_storage = true)
+#   - Monitoring: Idle-detection alarms (enable_idle_alerts = true)
+#   - Budget: Free tier monitoring alerts (when alert_email is set)
 #
 # Prerequisites:
 #   1. Set up ~/.oci/config with your OCI credentials
@@ -72,6 +75,9 @@ module "network" {
   subnet_cidr         = var.subnet_cidr
   private_subnet_cidr = var.private_subnet_cidr
   dns_label           = var.dns_label
+
+  # Private subnet is only needed for MySQL
+  enable_private_subnet = var.enable_mysql
 
   # SSH access — restricted to a single IP (use `just my-ip` to find yours)
   # Empty string = SSH disabled. Set to "x.x.x.x/32" to allow from one IP.
@@ -147,11 +153,23 @@ module "storage" {
 }
 
 # =============================================================================
-# MySQL HeatWave (Always Free)
+# MySQL HeatWave (Always Free — off by default)
 # =============================================================================
+
+resource "terraform_data" "validate_mysql_password" {
+  count = var.enable_mysql ? 1 : 0
+
+  lifecycle {
+    precondition {
+      condition     = var.mysql_admin_password != ""
+      error_message = "mysql_admin_password is required when enable_mysql = true. Set via: export TF_VAR_mysql_admin_password='YourPassword123!'"
+    }
+  }
+}
 
 module "mysql" {
   source = "../../modules/oci-mysql-heatwave"
+  count  = var.enable_mysql ? 1 : 0
 
   compartment_id      = var.compartment_ocid
   availability_domain = var.availability_domain
@@ -171,10 +189,12 @@ module "mysql" {
 }
 
 # =============================================================================
-# S3-Compatible Credentials (Customer Secret Key)
+# S3-Compatible Credentials (Customer Secret Key — only when object storage enabled)
 # =============================================================================
 
 resource "oci_identity_customer_secret_key" "s3_access" {
+  count = var.enable_object_storage ? 1 : 0
+
   display_name = "${var.instance_name}-s3-access"
   user_id      = var.user_ocid
 }
@@ -185,12 +205,14 @@ resource "oci_identity_customer_secret_key" "s3_access" {
 # =============================================================================
 
 resource "oci_identity_policy" "object_storage_lifecycle" {
+  count = var.enable_object_storage ? 1 : 0
+
   compartment_id = var.compartment_ocid
   name           = "object-storage-lifecycle-policy"
   description    = "Allow Object Storage service to manage objects for lifecycle policies"
 
   statements = [
-    "Allow service objectstorage-${module.object_storage.region} to manage object-family in tenancy"
+    "Allow service objectstorage-${module.object_storage[0].region} to manage object-family in tenancy"
   ]
 
   freeform_tags = {
@@ -200,7 +222,7 @@ resource "oci_identity_policy" "object_storage_lifecycle" {
 }
 
 # =============================================================================
-# Object Storage (Always Free - Paid Account)
+# Object Storage (Always Free - Paid Account — off by default)
 # Paid accounts get 10 GB each tier separately = 30 GB total free
 #   - 10 GB Standard (hot)
 #   - 10 GB InfrequentAccess (warm)
@@ -212,6 +234,7 @@ resource "oci_identity_policy" "object_storage_lifecycle" {
 
 module "object_storage" {
   source = "../../modules/oci-object-storage"
+  count  = var.enable_object_storage ? 1 : 0
 
   compartment_id = var.compartment_ocid
   bucket_name    = var.object_storage_bucket_name
