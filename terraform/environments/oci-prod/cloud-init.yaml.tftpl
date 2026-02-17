@@ -1,0 +1,41 @@
+#cloud-config
+# OCI Always Free ARM instance — first-boot configuration
+#
+# This runs once on instance creation. Changes here require instance recreation.
+#
+# What it does:
+#   1. Opens iptables for ports that VCN security lists allow
+#      (OCI Ubuntu images block most inbound traffic at the host level)
+#   2. Hardens SSH (key-only auth, no root login)
+#   3. Enables unattended security upgrades
+
+# Disable password-based SSH from the start
+ssh_pwauth: false
+
+packages:
+  - unattended-upgrades
+  - iptables-persistent
+
+write_files:
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+runcmd:
+  # --- iptables ---
+  # OCI Ubuntu images have iptables rules that reject inbound traffic even
+  # when the VCN security list allows it. Open the ports we actually use.
+%{ for port in tcp_ports ~}
+  - iptables -I INPUT -p tcp --dport ${port} -m state --state NEW -j ACCEPT
+%{ endfor ~}
+%{ for port in udp_ports ~}
+  - iptables -I INPUT -p udp --dport ${port} -j ACCEPT
+%{ endfor ~}
+  - netfilter-persistent save
+
+  # --- SSH hardening ---
+  - sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+  - sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+  - systemctl reload ssh
