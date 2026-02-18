@@ -62,15 +62,13 @@ resource "oci_ons_subscription" "email" {
 # These fire when utilization is LOW — meaning Oracle may flag the instance as
 # idle and eventually reclaim it.
 #
-# The MQL query window is 4 days ([4d]), so the alarm evaluates a rolling 4-day
-# average/percentile. Combined with a 1-hour pending_duration (the OCI max),
-# this means the metric must stay below the threshold across 4+ days before
-# the alarm fires — giving you ~3 days of buffer before Oracle's 7-day
-# reclaim deadline.
-#
-# repeat_notification_duration of 6 hours re-sends while still idle.
+# The MQL query window is 1 day ([1d]) — the OCI maximum interval.
+# Combined with a 1-hour pending_duration, this means the alarm fires when
+# the metric stays below the threshold across the latest 24-hour window.
+# Repeat notifications every 6 hours re-alert while still idle, giving you
+# ongoing warnings well before Oracle's 7-day reclaim deadline.
 
-# CPU idle: fires when 4-day 95th-percentile CPU stays below threshold.
+# CPU idle: fires when 1-day 95th-percentile CPU stays below threshold.
 # Matches Oracle's own 95th-percentile evaluation method.
 resource "oci_monitoring_alarm" "cpu_idle" {
   count = var.enable_idle_alerts ? 1 : 0
@@ -82,7 +80,7 @@ resource "oci_monitoring_alarm" "cpu_idle" {
   namespace             = "oci_computeagent"
   severity              = "WARNING"
 
-  query = "CpuUtilization[4d]{resourceId = \"${var.instance_id}\"}.percentile(0.95) < ${var.cpu_idle_threshold}"
+  query = "CpuUtilization[1d]{resourceId = \"${var.instance_id}\"}.percentile(0.95) < ${var.cpu_idle_threshold}"
 
   pending_duration             = "PT1H"
   repeat_notification_duration = "PT6H"
@@ -90,15 +88,15 @@ resource "oci_monitoring_alarm" "cpu_idle" {
   destinations                 = [oci_ons_notification_topic.monitoring.id]
 
   body = join("", [
-    "CPU utilization (95th percentile) has been below ${var.cpu_idle_threshold}% for ~4 days. ",
-    "Oracle reclaims Always Free instances after 7 days of idle — you have ~3 days to act. ",
+    "CPU utilization (95th percentile) has been below ${var.cpu_idle_threshold}% for the past 24 hours. ",
+    "Oracle reclaims Always Free instances after 7 days of idle — act soon. ",
     "Generate some load or schedule a cron job to avoid reclamation.",
   ])
 
   freeform_tags = var.tags
 }
 
-# Memory idle: fires when 4-day average memory stays below threshold.
+# Memory idle: fires when 1-day average memory stays below threshold.
 # Only relevant for A1 (ARM) shapes — Oracle checks memory for A1 instances.
 resource "oci_monitoring_alarm" "memory_idle" {
   count = var.enable_idle_alerts ? 1 : 0
@@ -110,7 +108,7 @@ resource "oci_monitoring_alarm" "memory_idle" {
   namespace             = "oci_computeagent"
   severity              = "WARNING"
 
-  query = "MemoryUtilization[4d]{resourceId = \"${var.instance_id}\"}.mean() < ${var.memory_idle_threshold}"
+  query = "MemoryUtilization[1d]{resourceId = \"${var.instance_id}\"}.mean() < ${var.memory_idle_threshold}"
 
   pending_duration             = "PT1H"
   repeat_notification_duration = "PT6H"
@@ -118,18 +116,18 @@ resource "oci_monitoring_alarm" "memory_idle" {
   destinations                 = [oci_ons_notification_topic.monitoring.id]
 
   body = join("", [
-    "Memory utilization has been below ${var.memory_idle_threshold}% for ~4 days. ",
-    "Oracle reclaims Always Free A1 instances after 7 days of idle — you have ~3 days to act. ",
+    "Memory utilization has been below ${var.memory_idle_threshold}% for the past 24 hours. ",
+    "Oracle reclaims Always Free A1 instances after 7 days of idle — act soon. ",
     "Run memory-consuming workloads or allocate buffers to avoid reclamation.",
   ])
 
   freeform_tags = var.tags
 }
 
-# Network idle: fires when 4-day average inbound bytes are near zero.
+# Network idle: fires when 1-day average inbound bytes are near zero.
 # Oracle checks "network utilization < 20%" but the metric is raw bytes, not a
 # percentage. A near-zero byte count is a strong proxy for idle networking.
-# Threshold: < 1 KB average inbound over 4 days (~0 real traffic).
+# Threshold: < 1 KB average inbound over 1 day (~0 real traffic).
 resource "oci_monitoring_alarm" "network_idle" {
   count = var.enable_idle_alerts ? 1 : 0
 
@@ -140,7 +138,7 @@ resource "oci_monitoring_alarm" "network_idle" {
   namespace             = "oci_computeagent"
   severity              = "WARNING"
 
-  query = "NetworksBytesIn[4d]{resourceId = \"${var.instance_id}\"}.mean() < 1024"
+  query = "NetworksBytesIn[1d]{resourceId = \"${var.instance_id}\"}.mean() < 1024"
 
   pending_duration             = "PT1H"
   repeat_notification_duration = "PT6H"
@@ -148,8 +146,8 @@ resource "oci_monitoring_alarm" "network_idle" {
   destinations                 = [oci_ons_notification_topic.monitoring.id]
 
   body = join("", [
-    "Inbound network traffic has been near zero for ~4 days. ",
-    "Oracle reclaims Always Free instances after 7 days of idle — you have ~3 days to act. ",
+    "Inbound network traffic has been near zero for the past 24 hours. ",
+    "Oracle reclaims Always Free instances after 7 days of idle — act soon. ",
     "Ensure the instance is receiving traffic or schedule periodic health checks.",
   ])
 

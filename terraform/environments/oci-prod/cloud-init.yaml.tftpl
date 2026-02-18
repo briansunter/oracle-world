@@ -8,6 +8,7 @@
 #      (OCI Ubuntu images block most inbound traffic at the host level)
 #   2. Hardens SSH (key-only auth, no root login)
 #   3. Enables unattended security upgrades
+#   4. Formats and mounts block volume at /data (if attached)
 
 # Disable password-based SSH from the start
 ssh_pwauth: false
@@ -22,6 +23,20 @@ write_files:
       APT::Periodic::Update-Package-Lists "1";
       APT::Periodic::Unattended-Upgrade "1";
       APT::Periodic::AutocleanInterval "7";
+
+%{ if enable_block_volume ~}
+# --- Block volume: fstab entry via mounts ---
+# cloud-init's mounts module adds the fstab entry declaratively. Mounting by
+# LABEL is device-path-independent and survives device name changes.
+# The label won't resolve until runcmd formats the volume, but nofail prevents
+# errors. On subsequent boots fstab handles mounting automatically.
+#
+# NOTE: fs_setup is NOT used because OCI's /dev/oracleoci symlink naming
+# confuses cloud-init's partition detection (oraclevda->sdb but oraclevda1->sda1
+# makes cloud-init think the device already has a formatted partition).
+mounts:
+  - [LABEL=data, /data, ext4, "defaults,_netdev,nofail", "0", "2"]
+%{ endif ~}
 
 runcmd:
   # --- iptables ---
@@ -38,4 +53,26 @@ runcmd:
   # --- SSH hardening ---
   - sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
   - sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
-  - systemctl reload ssh
+  - systemctl reload ssh || true
+%{ if enable_block_volume ~}
+
+  # --- Block volume: wait for attachment, format, mount ---
+  # Terraform attaches the volume concurrently with instance boot. The
+  # /dev/oracleoci/ symlinks may not exist when cloud-init starts, so we
+  # wait up to 3 minutes for the device to appear. Format if unformatted,
+  # then mount via the fstab entry created by `mounts` above.
+  - |
+    DEVICE=""
+    for i in $(seq 1 90); do
+      for dev in /dev/oracleoci/oraclevda /dev/oracleoci/oraclevdb; do
+        [ -b "$dev" ] && DEVICE="$dev" && break 2
+      done
+      sleep 2
+    done
+    if [ -n "$DEVICE" ]; then
+      blkid "$DEVICE" >/dev/null 2>&1 || mkfs.ext4 -L data "$DEVICE"
+      mount -a
+    else
+      echo "WARNING: block volume device not found after 180s" >&2
+    fi
+%{ endif ~}

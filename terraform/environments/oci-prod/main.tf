@@ -54,35 +54,19 @@ terraform {
     }
   }
 
-  # Default: local backend. Recommended: migrate to remote after initial deploy.
-  # Run `just init` after uncommenting to migrate state.
-  #
-  # Option 1: OCI Object Storage (S3-compatible) — stays within OCI
-  # Requires: oci os bucket create --name terraform-state --compartment-id <ocid>
+  # Remote backend: OCI Object Storage (S3-compatible)
   # Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in .env
-  #
-  # backend "s3" {
-  #   bucket                      = "terraform-state"
-  #   key                         = "oci-prod/terraform.tfstate"
-  #   region                      = "us-ashburn-1"
-  #   endpoints                   = { s3 = "https://<namespace>.compat.objectstorage.<region>.oraclecloud.com" }
-  #   skip_region_validation      = true
-  #   skip_credentials_validation = true
-  #   skip_requesting_account_id  = true
-  #   skip_metadata_api_check     = true
-  #   use_path_style              = true
-  # }
-  #
-  # Option 2: HCP Terraform (free up to 500 resources)
-  # Run `tofu login` first, then uncomment:
-  #
-  # cloud {
-  #   organization = "your-org"
-  #   workspaces { name = "oci-prod" }
-  # }
-  #
-  # Option 3: PostgreSQL
-  # backend "pg" { conn_str = "postgres://user:pass@host/db" schema_name = "oci_prod" }
+  backend "s3" {
+    bucket                      = "terraform-state"
+    key                         = "oci-prod/terraform.tfstate"
+    region                      = "us-sanjose-1"
+    endpoints                   = { s3 = "https://axeolpvc5niy.compat.objectstorage.us-sanjose-1.oraclecloud.com" }
+    skip_region_validation      = true
+    skip_credentials_validation = true
+    skip_requesting_account_id  = true
+    skip_metadata_api_check     = true
+    use_path_style              = true
+  }
 }
 
 # =============================================================================
@@ -105,8 +89,9 @@ locals {
   udp_ports = var.enable_public_access ? var.additional_udp_ports : []
 
   cloud_init = templatefile("${path.module}/cloud-init.yaml.tftpl", {
-    tcp_ports = local.tcp_ports
-    udp_ports = local.udp_ports
+    tcp_ports           = local.tcp_ports
+    udp_ports           = local.udp_ports
+    enable_block_volume = var.enable_block_volume
   })
 }
 
@@ -292,7 +277,7 @@ module "object_storage" {
 
   # Auto-tiering: automatically moves objects between Standard <-> InfrequentAccess
   # based on access patterns (30+ days no access -> InfrequentAccess)
-  enable_auto_tiering = true
+  enable_auto_tiering = var.object_storage_auto_tiering
 
   # Versioning for data protection (optional)
   enable_versioning = var.object_storage_versioning

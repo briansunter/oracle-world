@@ -57,10 +57,10 @@ resource "oci_mysql_mysql_db_system" "main" {
 
   freeform_tags = var.tags
 
-  # Prevent accidental deletion - remove this block to destroy
-  lifecycle {
-    prevent_destroy = true
-  }
+  # Prevent accidental deletion - uncomment to protect from destroy
+  # lifecycle {
+  #   prevent_destroy = true
+  # }
 }
 
 # =============================================================================

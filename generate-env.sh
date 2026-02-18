@@ -54,7 +54,7 @@ EOF
 if [[ "$mysql_flag" =~ ^[Yy](es)?$ ]]; then
     # Generate a MySQL-compatible password: mixed case + digits + special char
     # OCI requires: 8-32 chars, uppercase, lowercase, number, special char
-    mysql_password="$(openssl rand -base64 18 | tr -d '/+=' | head -c 20)$(echo '!@#$%' | fold -w1 | shuf | head -1)$(openssl rand -hex 1 | tr '[:lower:]' '[:upper:]')"
+    mysql_password="$(openssl rand -base64 18 | tr -d '/+=' | head -c 20)$(echo '!@#^&' | fold -w1 | shuf | head -1)$(openssl rand -hex 1 | tr '[:lower:]' '[:upper:]')"
     cat >> "$ENV_FILE" <<EOF
 
 # MySQL admin password (8-32 chars, uppercase + lowercase + number + special)

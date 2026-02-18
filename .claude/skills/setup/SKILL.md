@@ -96,8 +96,8 @@ Ask the user the following questions using `AskUserQuestion`. Group related ques
   - **Enable**: Creates a private subnet + Always Free MySQL HeatWave (50 GB). Access via SSH tunnel from the instance.
 
 - **Object Storage**: Ask whether to enable S3-compatible Object Storage.
-  - **Disable (default)**: No bucket or S3 credentials created.
-  - **Enable**: Creates a 30 GB S3-compatible bucket with auto-tiering.
+  - **Disable (default)**: No bucket or S3 credentials created. Simpler deployment.
+  - **Enable**: Creates an S3-compatible bucket (up to 30 GB free on paid accounts: 10 GB per tier). Useful for backups, media, logs, or remote Terraform state.
 
 - **Storage layout**: Ask how they want to split their 200 GB free storage.
   - **50 GB boot + 150 GB block (default)**: Separate data volume at `/data`. Data survives instance recreation.
@@ -118,8 +118,8 @@ Skip this group if no alert email was provided — monitoring requires an email.
 **Question group 4 — Ports (only if public mode was selected):**
 
 - **TCP ports**: Ask which TCP ports to open. Provide options:
-  - **443 only (default)**: HTTPS only.
-  - **80 and 443**: HTTP + HTTPS (for web servers with redirect).
+  - **80 and 443 (default)**: HTTP + HTTPS (for web servers with redirect).
+  - **443 only**: HTTPS only.
   - **Custom**: Let the user specify a comma-separated list.
 
 - **UDP ports**: Ask if they need any UDP ports open.
@@ -127,13 +127,37 @@ Skip this group if no alert email was provided — monitoring requires an email.
   - **51820 (WireGuard)**: For VPN use.
   - **Custom**: Let the user specify.
 
-**Question group 5 — Object storage (only if object storage was enabled):**
+**Question group 5 — SSH access:**
+
+- **SSH access**: Ask whether to whitelist their current IP for SSH access.
+  - **Yes, allow SSH from my current IP (recommended)**: Detect their public IPv4 using `curl -4 -s https://ifconfig.me` and set `ssh_source_cidr` to `<ip>/32` in the tfvars. This opens port 22 from that single IP only.
+  - **No, keep SSH closed**: Leave `ssh_source_cidr` empty. They can open it later with `just ssh-allow`.
+
+**Question group 6 — Remote state backend:**
+
+Ask about remote state backend upfront so the full plan is known before generating any files. This is important because:
+- Users should decide on their state backend BEFORE their first `apply`
+- If they choose OCI Object Storage, the setup flow needs to create the bucket and configure S3 credentials before init
+- Asking late (after init/plan) can lead to state being created locally first, then needing migration
+
+Present options:
+- **OCI Object Storage (Recommended)**: Uses your existing OCI account with S3-compatible API. Free tier impact is negligible (~10-50 KB state files). Note: the native `backend "oci"` exists in Terraform 1.12+ but is not yet available in OpenTofu, so we use the S3-compatible API instead.
+- **HCP Terraform / Terraform Cloud**: Free up to 500 managed resources. Includes locking, versioning, run history, and a web UI.
+- **Skip for now**: Keep local state. Can migrate later.
+
+Store the user's choice — it will be executed in Phase 6 (after .env and tfvars are generated but before init/plan).
+
+**Question group 7 — Object storage details (only if object storage was enabled):**
 
 Skip this group if object storage was not enabled.
 
-- **Archive lifecycle**: Ask if they want automatic archiving of old objects.
-  - **Disable (default)**: Objects stay in their current tier.
-  - **Enable**: Move objects to Archive tier after N days (ask for number of days, default 180). Mention 90-day minimum retention and ~1 hour restore time.
+- **Auto-tiering**: Ask whether to enable automatic tiering.
+  - **Enable (recommended)**: Untouched objects automatically move to InfrequentAccess tier after 30 days, and back when accessed again. On paid accounts each tier has its own 10 GB free allowance, so auto-tiering effectively gives you more free storage.
+  - **Disable**: Everything stays in Standard tier. Use this if all data is frequently accessed.
+
+- **Archive lifecycle**: Ask if they want old objects automatically moved to Archive tier.
+  - **Disable (default)**: No archiving. Objects stay in Standard/InfrequentAccess.
+  - **Enable**: Moves objects to Archive after N days (ask for number, default 180). Cheapest tier but: 90-day minimum retention, ~1 hour to restore. Good for data you must keep but rarely read.
 
 #### Phase 4: Generate .env (Secrets)
 
@@ -141,17 +165,24 @@ Run `./generate-env.sh` to create `.env` with random secrets. The script generat
 
 1. Check if `.env` already exists by running `test -f .env && echo exists || echo missing`.
 
-2. If `.env` already exists:
-   - Tell the user it already exists and will be kept as-is.
-   - Ask if they want to regenerate it (this backs up the old one first).
-   - If yes, run with `--force`. If no, skip to Phase 5.
+2. **If `.env` already exists — check for existing Terraform state before offering regeneration:**
+   ```bash
+   test -f terraform/environments/oci-prod/terraform.tfstate && echo "STATE_EXISTS" || echo "NO_STATE"
+   ls terraform/environments/oci-prod/.terraform/ 2>/dev/null && echo "INIT_EXISTS" || echo "NO_INIT"
+   ```
 
-3. Run the script via Bash with the appropriate flags:
+   - **If state exists (local or initialized)**: **Default to keeping the existing `.env`.** Warn the user:
+     > "Your `.env` already exists and you have existing Terraform state encrypted with its passphrase. **Regenerating `.env` would create a new passphrase, making your existing state unreadable.** I'll keep your current `.env`."
+   - Only offer regeneration if the user explicitly asks, and warn them it will require destroying or migrating existing state first.
+   - If MySQL is being newly enabled and `.env` may lack `TF_VAR_mysql_admin_password`, tell the user to add it manually:
+     > "You're enabling MySQL but your existing `.env` may not have a MySQL password. Add one manually: `echo 'TF_VAR_mysql_admin_password="'$(openssl rand -base64 24)'"' >> .env`"
+
+   - **If no state exists**: Safe to regenerate. Ask if they want to regenerate (this backs up the old one first). If yes, run with `--force`. If no, skip to Phase 5.
+
+3. **If `.env` does not exist** (fresh setup): Run the script via Bash with the appropriate flags:
    ```bash
    ./generate-env.sh --mysql              # first time, MySQL enabled
    ./generate-env.sh --no-mysql           # first time, MySQL disabled
-   ./generate-env.sh --force --mysql      # regenerate, MySQL enabled
-   ./generate-env.sh --force --no-mysql   # regenerate, MySQL disabled
    ```
    The `--mysql` / `--no-mysql` flag is determined by whether MySQL was enabled in Phase 3.
 
@@ -172,10 +203,12 @@ Run `./generate-env.sh` to create `.env` with random secrets. The script generat
    Conditionally include (only when different from defaults):
    - `alert_email` (only if provided)
    - `enable_public_access` (only if `false`)
-   - `additional_tcp_ports` (only if not `[443]`)
+   - `additional_tcp_ports` (only if not `[80, 443]`)
    - `additional_udp_ports` (only if not empty)
+   - `ssh_source_cidr` (only if user chose to whitelist their IP)
    - `enable_mysql` (only if `true`)
    - `enable_object_storage` (only if `true`)
+   - `object_storage_auto_tiering` (only if `false` and object storage enabled)
    - `enable_block_volume` (only if `false`)
    - `boot_volume_size_gb` (only if not `50`)
    - `enable_idle_alerts` (only if `true`)
@@ -187,83 +220,105 @@ Run `./generate-env.sh` to create `.env` with random secrets. The script generat
 
 3. Write the file using the Write tool.
 
-#### Phase 6: Next Steps
+#### Phase 6: Remote State Backend Setup
 
-Show the user what to do next:
+Execute the remote state backend choice from Phase 3, Question group 6. This must happen BEFORE `init` so state goes directly to the remote backend on first run.
 
-1. Initialize and deploy:
+**If the user chose OCI Object Storage:**
+
+This requires an S3-compatible bucket and Customer Secret Key credentials. Run the CLI commands directly — don't just show them.
+
+1. Create the state bucket (must exist before backend config). Run via Bash:
+   ```bash
+   oci os bucket create --name terraform-state --compartment-id <compartment_ocid>
    ```
-   just init
-   just plan
-   just apply
+   If the bucket already exists, `oci os bucket get --name terraform-state` will confirm it.
+
+2. Get the namespace (needed for the S3 endpoint URL). Run via Bash:
+   ```bash
+   oci os ns get --query 'data' --raw-output
+   ```
+   Store the namespace value — it's needed for the backend endpoint URL.
+
+3. The user must create S3 credentials manually in the OCI Console (these can't be created via CLI):
+   1. Go to OCI Console → **Identity & Security** → **Users** → click their user
+   2. Scroll to **Resources** → **Customer Secret Keys** (left sidebar)
+   3. Click **Generate Secret Key**, give it a name like "terraform-state"
+   4. **Copy the secret key immediately** — it's only shown once
+   5. The access key ID is shown in the list after creation
+   6. Tell the user to add the values to `.env` themselves:
+      ```bash
+      echo 'AWS_ACCESS_KEY_ID="<their_access_key>"' >> .env
+      echo 'AWS_SECRET_ACCESS_KEY="<their_secret_key>"' >> .env
+      ```
+      **Do NOT read `.env` after writing.** The user pastes their own values.
+   7. Wait for the user to confirm they've added the credentials before proceeding.
+
+4. Update the backend block in `main.tf` using the Edit tool. Uncomment and fill in the existing S3 backend block with the discovered namespace and region:
+   ```hcl
+   backend "s3" {
+     bucket                      = "terraform-state"
+     key                         = "oci-prod/terraform.tfstate"
+     region                      = "<region>"
+     endpoints                   = { s3 = "https://<namespace>.compat.objectstorage.<region>.oraclecloud.com" }
+     skip_region_validation      = true
+     skip_credentials_validation = true
+     skip_requesting_account_id  = true
+     skip_metadata_api_check     = true
+     use_path_style              = true
+   }
    ```
 
-2. After deployment:
-   - `just ssh-allow` to open SSH from their current IP
-   - `just ssh` to connect
-   - If block volume enabled: mount instructions (`sudo mkfs.ext4 /dev/oracleoci/oraclevdb && sudo mount /dev/oracleoci/oraclevdb /data`)
-   - If MySQL enabled: `just mysql-tunnel` for MySQL access
+5. Proceed to Phase 7 — `just init` will configure the remote backend and send state directly there.
 
-3. Remind them to back up `.env` — losing the passphrase means losing access to Terraform state.
+**If the user chose HCP Terraform:**
 
-4. **Recommend setting up a remote state backend** for locking, versioning, and offsite backup. Present three options using `AskUserQuestion`:
+1. Direct them to sign up at https://app.terraform.io
+2. Run `tofu login`
+3. Update `main.tf` with a `cloud {}` block (use Edit tool):
+   ```hcl
+   cloud {
+     organization = "<their-org>"
+     workspaces {
+       name = "oci-prod"
+     }
+   }
+   ```
+4. Proceed to Phase 7 — `just init` will configure the backend.
 
-   - **OCI Object Storage (Recommended)**: Uses your existing OCI account with S3-compatible API. Free tier impact is negligible (~10-50 KB state files). Requires creating a bucket first, then adding an `s3` backend block to `main.tf`.
-   - **HCP Terraform / Terraform Cloud**: Free up to 500 managed resources. Includes locking, versioning, run history, and a web UI. Just run `tofu login` and add a `cloud {}` block.
-   - **Skip for now**: Keep local state. Can migrate later.
+**If the user chose "Skip for now":** Proceed directly to Phase 7.
 
-   If the user chooses **OCI Object Storage**:
-   1. Create the state bucket (must exist before backend migration):
-      ```bash
-      oci os bucket create --name terraform-state --compartment-id <compartment_ocid>
-      ```
-   2. Get the namespace:
-      ```bash
-      oci os ns get --query 'data' --raw-output
-      ```
-   3. If `enable_object_storage = true`, the S3 credentials (Customer Secret Key) are already created — get the access key ID:
-      ```bash
-      just output | grep s3_access_key_id
-      ```
-      The secret key was shown once at creation; if lost, a new one must be created.
-      If `enable_object_storage = false`, the user needs to create S3 credentials manually in the OCI Console under Identity > Users > Customer Secret Keys.
-   4. Add `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` to `.env` — run a command like:
-      ```bash
-      echo 'AWS_ACCESS_KEY_ID="<access_key>"' >> .env
-      echo 'AWS_SECRET_ACCESS_KEY="<secret_key>"' >> .env
-      ```
-      **Do NOT read `.env` after writing.** Let the user paste their own values.
-   5. Update the backend block in `main.tf` (use Edit tool):
-      ```hcl
-      backend "s3" {
-        bucket                      = "terraform-state"
-        key                         = "oci-prod/terraform.tfstate"
-        region                      = "<region>"
-        endpoints                   = { s3 = "https://<namespace>.compat.objectstorage.<region>.oraclecloud.com" }
-        skip_region_validation      = true
-        skip_credentials_validation = true
-        skip_requesting_account_id  = true
-        skip_metadata_api_check     = true
-        use_path_style              = true
-      }
-      ```
-   6. Run `just init` — OpenTofu will detect the backend change and prompt to migrate state.
+#### Phase 7: Initialize and Plan
 
-   If the user chooses **HCP Terraform**:
-   1. Direct them to sign up at https://app.terraform.io
-   2. Run `tofu login`
-   3. Update `main.tf` with a `cloud {}` block (use Edit tool):
-      ```hcl
-      cloud {
-        organization = "<their-org>"
-        workspaces {
-          name = "oci-prod"
-        }
-      }
-      ```
-   4. Run `just init` to migrate.
+Run init and plan so the user can see what will be created:
 
-Ask if they'd like to proceed with `just init` now or do it later.
+1. Run `just init` via Bash. If it fails, help the user debug (common issues: missing OCI config, bad credentials, network errors). If a remote backend was configured in Phase 6, init will set it up now.
+
+2. Run `just plan` via Bash. Show the user a summary of what will be created/changed/destroyed.
+
+#### Phase 8: Deploy
+
+After init and plan succeed, deploy the infrastructure:
+
+1. Ask the user if they'd like to proceed with `just apply-auto` to deploy now, or do it later.
+   - If yes, run `just apply-auto` via Bash. Show the summary output after apply completes.
+   - If no, tell them they can run `just apply` later when ready.
+
+2. If the user deployed with `enable_object_storage = true` AND chose OCI Object Storage for remote state in Phase 6, run `just s3-creds-to-env` via Bash after apply completes. This extracts the Terraform-managed S3 credentials and writes them to `.env` — **Claude never sees the credential values**. This is a convenience step: the user already created manual S3 credentials in Phase 6 for the state backend, but this captures the Terraform-managed credentials too (which may be useful for other S3 operations).
+
+#### Phase 9: Post-Deploy Tips
+
+Show the user what to do after deployment:
+
+1. Connect to the instance:
+   - If SSH was whitelisted during setup: `just ssh` to connect directly
+   - If SSH was not whitelisted: `just ssh-allow` first to open SSH from their current IP, then `just ssh`
+   - To revoke SSH access later: `just ssh-revoke`
+   - If block volume enabled: it's automatically formatted and mounted at `/data` on first boot via cloud-init
+
+2. If MySQL enabled: `just mysql-tunnel` for MySQL access
+
+4. Remind them to back up `.env` — losing the passphrase means losing access to Terraform state.
 
 ### Notes
 

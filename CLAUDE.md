@@ -16,8 +16,10 @@ Prefer `just` recipes from the project root. All `tofu` commands run from `terra
 just setup         # Auto-discover OCI config, generate tfvars
 just init          # Initialize providers and modules
 just plan          # Preview changes
-just apply         # Deploy infrastructure
+just apply         # Deploy infrastructure (interactive confirmation)
+just apply-auto    # Deploy infrastructure (skip confirmation)
 just destroy       # Tear down infrastructure
+just destroy-auto  # Tear down infrastructure (skip confirmation)
 just fmt           # Format all .tf files
 just validate      # Validate configuration syntax
 just output        # Show all outputs
@@ -101,10 +103,13 @@ cp terraform/environments/oci-prod/oci-prod.auto.tfvars.example \
    terraform/environments/oci-prod/oci-prod.auto.tfvars
 # Edit oci-prod.auto.tfvars with your values
 
+# (Recommended) Set up a remote state backend BEFORE first init — see "Remote State Backend" below
 just init
 just plan
 just apply
 ```
+
+> **Warning**: Never regenerate `.env` when Terraform state already exists. The state encryption passphrase in `.env` is used to encrypt/decrypt state files. A new passphrase makes existing state permanently unreadable. If you need to add secrets (e.g., MySQL password), append to `.env` rather than regenerating it.
 
 ## Always Free Tier Limits
 
@@ -212,6 +217,7 @@ All secrets live in `.env` (gitignored, `chmod 600`), never in `.auto.tfvars` or
 - **`.env` is never read by Claude**: A `PreToolUse` hook (`.claude/hooks/protect-env.sh`) blocks Read, Edit, Write, and Bash tools from accessing `.env` or echoing `TF_VAR_` secret values.
 - **`generate-env.sh` handles all secret creation**: The script generates secrets internally and writes directly to `.env`. Claude calls the script but never sees the output values.
 - **Backup `.env`**: Losing the passphrase means losing access to your Terraform state. `--force` creates a timestamped backup before overwriting.
+- **Never regenerate `.env` with existing state**: The passphrase encrypts state files. Regenerating creates a new passphrase that cannot decrypt existing state. To add new secrets (e.g., MySQL password), append to `.env` instead of regenerating.
 
 ### Network Security
 
@@ -250,12 +256,12 @@ Cloud-init runs once on creation. Changes require instance recreation (terraform
 
 After `just apply`:
 
-1. **Mount block volume**: `sudo mkfs.ext4 /dev/oracleoci/oraclevdb && sudo mount /dev/oracleoci/oraclevdb /data` (first time only, add to `/etc/fstab`)
+1. **Block volume**: Automatically formatted (ext4) and mounted at `/data` on first boot via cloud-init. Persists across reboots via `/etc/fstab`.
 2. **MySQL access** (if enabled): `just mysql-tunnel` then connect with `mysql -h 127.0.0.1 -P 3306 -u admin -p`
 
 ## Remote State Backend
 
-Local state works for solo use but has no locking, versioning, or offsite backup. Recommended: move to a remote backend after initial deploy.
+Local state works for solo use but has no locking, versioning, or offsite backup. **Recommended: set up a remote backend BEFORE your first `just init`** so state goes directly to the remote backend and never exists only locally. Migrating later works but is an extra step that can be avoided.
 
 ### Recommended Options
 

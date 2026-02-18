@@ -113,14 +113,14 @@ setup:
 my-ip:
     #!/usr/bin/env bash
     set -euo pipefail
-    ip=$(curl -s --max-time 5 https://ifconfig.me || curl -s --max-time 5 https://api.ipify.org || curl -s --max-time 5 https://icanhazip.com)
+    ip=$(curl -4 -s --max-time 5 https://ifconfig.me || curl -4 -s --max-time 5 https://api.ipify.org || curl -4 -s --max-time 5 https://icanhazip.com)
     echo "$ip"
 
 # Allow SSH from your current IP and apply the change
 ssh-allow:
     #!/usr/bin/env bash
     set -euo pipefail
-    ip=$(curl -s --max-time 5 https://ifconfig.me || curl -s --max-time 5 https://api.ipify.org || curl -s --max-time 5 https://icanhazip.com)
+    ip=$(curl -4 -s --max-time 5 https://ifconfig.me || curl -4 -s --max-time 5 https://api.ipify.org || curl -4 -s --max-time 5 https://icanhazip.com)
     if [ -z "$ip" ]; then
         echo "Error: could not determine public IP"
         exit 1
@@ -132,6 +132,10 @@ ssh-allow:
 # Revoke SSH access (close port 22)
 ssh-revoke:
     tofu -chdir={{env}} apply -var="ssh_source_cidr=" -target=module.network.oci_core_security_list.main
+
+# Run arbitrary tofu subcommands (e.g. just tofu state list)
+tofu *args:
+    tofu -chdir={{env}} {{args}}
 
 # Initialize OpenTofu providers and modules
 init:
@@ -154,12 +158,20 @@ plan:
     tofu -chdir={{env}} plan
 
 # Deploy infrastructure
-apply:
-    tofu -chdir={{env}} apply
+apply *flags:
+    tofu -chdir={{env}} apply {{flags}}
+
+# Deploy infrastructure (skip confirmation prompt)
+apply-auto:
+    tofu -chdir={{env}} apply -auto-approve
 
 # Tear down infrastructure
-destroy:
-    tofu -chdir={{env}} destroy
+destroy *flags:
+    tofu -chdir={{env}} destroy {{flags}}
+
+# Tear down infrastructure (skip confirmation prompt)
+destroy-auto:
+    tofu -chdir={{env}} destroy -auto-approve
 
 # Show all outputs
 output:
@@ -174,6 +186,41 @@ ssh:
         exit 1
     }
     exec ssh "ubuntu@$ip"
+
+# Write S3 credentials from terraform output to .env (values never shown)
+s3-creds-to-env:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -f .env ]; then
+        echo "Error: .env not found. Run ./generate-env.sh first."
+        exit 1
+    fi
+    # Check if already present
+    if grep -q '^AWS_ACCESS_KEY_ID=' .env 2>/dev/null; then
+        echo "S3 credentials already exist in .env — skipping."
+        echo "To regenerate, remove the AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY lines from .env first."
+        exit 0
+    fi
+    ACCESS_KEY=$(tofu -chdir={{env}} output -raw s3_access_key 2>/dev/null) || {
+        echo "Error: could not read s3_access_key from terraform output."
+        echo "Make sure enable_object_storage = true and infrastructure is deployed."
+        exit 1
+    }
+    SECRET_KEY=$(tofu -chdir={{env}} output -raw s3_secret_key 2>/dev/null) || {
+        echo "Error: could not read s3_secret_key from terraform output."
+        exit 1
+    }
+    if [ -z "$ACCESS_KEY" ] || [ "$ACCESS_KEY" = "null" ]; then
+        echo "Error: S3 credentials not found. Is enable_object_storage = true?"
+        exit 1
+    fi
+    {
+        echo ""
+        echo "# S3-compatible Object Storage credentials (for remote state backend)"
+        echo "AWS_ACCESS_KEY_ID=\"$ACCESS_KEY\""
+        echo "AWS_SECRET_ACCESS_KEY=\"$SECRET_KEY\""
+    } >> .env
+    echo "S3 credentials written to .env (access key and secret key)."
 
 # Open SSH tunnel for MySQL access (localhost:3306 → MySQL)
 mysql-tunnel:

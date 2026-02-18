@@ -73,7 +73,7 @@ variable "ssh_source_cidr" {
 variable "additional_tcp_ports" {
   description = "TCP ports to open in VCN security list and instance iptables (0.0.0.0/0)"
   type        = list(number)
-  default     = [443]
+  default     = [80, 443]
 }
 
 variable "additional_udp_ports" {
@@ -197,6 +197,12 @@ variable "object_storage_versioning" {
   description = "Enable object versioning"
   type        = bool
   default     = false
+}
+
+variable "object_storage_auto_tiering" {
+  description = "Enable auto-tiering between Standard and InfrequentAccess based on access patterns"
+  type        = bool
+  default     = true
 }
 
 variable "object_storage_archive_enabled" {

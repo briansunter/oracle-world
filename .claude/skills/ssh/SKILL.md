@@ -19,7 +19,7 @@ Manage SSH access to the OCI compute instance. SSH is blocked by default and mus
 ### Steps
 
 #### allow (default)
-1. Get the user's public IP: `curl -s --max-time 5 https://ifconfig.me`
+1. Get the user's public IPv4: `curl -4 -s --max-time 5 https://ifconfig.me`
 2. Show the IP and confirm with the user
 3. Run: `terraform -chdir=terraform/environments/oci-prod apply -var="ssh_source_cidr=<IP>/32" -target=module.network.oci_core_security_list.main`
 

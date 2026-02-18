@@ -285,15 +285,7 @@ Cloud-init runs once on creation. Changes require instance recreation.
 
 After `just apply`:
 
-**Mount block volume** (if enabled):
-
-```bash
-just ssh
-sudo mkfs.ext4 /dev/oracleoci/oraclevdb   # first time only
-sudo mkdir -p /data
-sudo mount /dev/oracleoci/oraclevdb /data
-echo '/dev/oracleoci/oraclevdb /data ext4 defaults,_netdev 0 2' | sudo tee -a /etc/fstab
-```
+**Block volume** (if enabled): Automatically formatted (ext4) and mounted at `/data` on first boot via cloud-init. No manual steps needed.
 
 **Connect to MySQL** (if `enable_mysql = true`, from a separate terminal):
 

@@ -87,10 +87,10 @@ resource "oci_objectstorage_bucket" "main" {
 
   freeform_tags = var.tags
 
-  # Prevent accidental deletion - remove this block to destroy
-  lifecycle {
-    prevent_destroy = true
-  }
+  # Prevent accidental deletion - uncomment to protect from destroy
+  # lifecycle {
+  #   prevent_destroy = true
+  # }
 }
 
 # =============================================================================
