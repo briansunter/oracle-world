@@ -93,17 +93,17 @@ ssh_public_key = ""
 # =============================================================================
 # Public Access
 # =============================================================================
-# When enabled (default): NLB created, additional_tcp_ports open in VCN
-# security list + instance iptables (via cloud-init).
-# When disabled: no NLB, no inbound ports — SSH only (via ssh_source_cidr).
+# When enabled (default): additional_tcp_ports open in VCN security list
+# + instance iptables (via cloud-init).
+# When disabled: no inbound ports — SSH only (via ssh_source_cidr).
 #
 # enable_public_access = true
 
 # =============================================================================
 # Firewall — Inbound Ports (only when enable_public_access = true)
 # =============================================================================
-# These open to 0.0.0.0/0 (the entire internet) in VCN security list,
-# instance iptables (cloud-init), and NLB forwarding.
+# These open to 0.0.0.0/0 (the entire internet) in VCN security list
+# and instance iptables (cloud-init).
 # MySQL is private (VCN-only) — access via SSH tunnel from the instance.
 #
 # Common TCP ports:

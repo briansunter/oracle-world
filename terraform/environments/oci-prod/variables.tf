@@ -228,7 +228,7 @@ variable "object_storage_delete_days" {
 # =============================================================================
 
 variable "enable_public_access" {
-  description = "Open inbound ports and create NLB. When false, only SSH is allowed (via ssh_source_cidr)."
+  description = "Open inbound ports. When false, only SSH is allowed (via ssh_source_cidr)."
   type        = bool
   default     = true
 }

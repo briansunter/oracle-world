@@ -10,12 +10,7 @@ output "instance_id" {
 }
 
 output "public_ip" {
-  description = "Public IP address (NLB if enabled, otherwise direct instance IP)"
-  value       = var.enable_public_access ? module.nlb[0].public_ip : module.compute.public_ip
-}
-
-output "instance_ip" {
-  description = "Direct public IP of the instance (use NLB IP for services)"
+  description = "Public IP address of the instance"
   value       = module.compute.public_ip
 }
 
@@ -91,7 +86,7 @@ output "summary" {
   value       = <<-EOT
     OCI ARM Instance: ${var.instance_name}
     ─────────────────────────────────────
-    ${var.enable_public_access ? "NLB IP:       ${module.nlb[0].public_ip} (stable — use for DNS/services)\n    " : ""}Instance IP:  ${module.compute.public_ip}${var.enable_public_access ? " (direct — changes on recreate)" : ""}
+    Instance IP:  ${module.compute.public_ip}
     Private IP:   ${module.compute.private_ip}
     SSH Command:  ssh ubuntu@${module.compute.public_ip}
 
@@ -100,7 +95,7 @@ output "summary" {
     Memory:       ${var.memory_in_gbs} GB
     Boot Volume:  ${var.boot_volume_size_gb} GB
     Block Volume: ${var.enable_block_volume ? "${var.block_volume_size_gb} GB" : "disabled"}
-    Public:       ${var.enable_public_access ? "enabled (NLB + ports ${join(", ", var.additional_tcp_ports)})" : "disabled (SSH only)"}
+    Public:       ${var.enable_public_access ? "enabled (ports ${join(", ", var.additional_tcp_ports)})" : "disabled (SSH only)"}
 
     Image:        ${module.compute.image_name}
     AD:           ${module.compute.availability_domain}
@@ -236,7 +231,6 @@ output "next_steps" {
 
     1. SSH to the instance:
        ssh ubuntu@${module.compute.public_ip}
-    ${var.enable_public_access ? "\n    NLB Public IP: ${module.nlb[0].public_ip} (stable — use for DNS/services)" : ""}
     ${length(module.mysql) > 0 ? "2. Connect to MySQL (from the instance via SSH):\n       ssh ubuntu@${module.compute.public_ip} -L 3306:${module.mysql[0].ip_address}:3306\n       mysql -h 127.0.0.1 -P 3306 -u ${var.mysql_admin_username} -p\n" : ""}
     ${length(module.object_storage) > 0 ? "Object Storage:\n       Bucket:    ${module.object_storage[0].bucket_name}\n       Namespace: ${module.object_storage[0].namespace}\n       Upload:    ${module.object_storage[0].oci_cli_upload}\n       S3:        ${module.object_storage[0].s3_endpoint}\n" : ""}
     Free Tier Limits:
@@ -245,7 +239,6 @@ output "next_steps" {
     │ Storage: 200 GB total block storage                                │
     │ MySQL:   ${format("%-56s", length(module.mysql) > 0 ? "50 GB Always Free HeatWave" : "disabled (enable_mysql = true)")}│
     │ Object:  ${format("%-56s", length(module.object_storage) > 0 ? "30 GB S3-compatible (auto-tiered)" : "disabled (enable_object_storage = true)")}│
-    │ NLB:     ${format("%-56s", var.enable_public_access ? "1 Network Load Balancer" : "disabled")}│
     ├──────────────────────────────────────────────────────────────────────┤
     │ Idle Reclaim: Oracle stops instances when ALL hold over 7 days:    │
     │   CPU 95th pctl < 20% AND Network < 20% AND Memory < 20% (A1)     │
@@ -253,20 +246,6 @@ output "next_steps" {
     └──────────────────────────────────────────────────────────────────────┘
 
   EOT
-}
-
-# =============================================================================
-# Network Load Balancer Outputs
-# =============================================================================
-
-output "nlb_id" {
-  description = "OCID of the Network Load Balancer"
-  value       = var.enable_public_access ? module.nlb[0].nlb_id : null
-}
-
-output "nlb_public_ip" {
-  description = "Stable public IP of the NLB (use for DNS records)"
-  value       = var.enable_public_access ? module.nlb[0].public_ip : null
 }
 
 # =============================================================================

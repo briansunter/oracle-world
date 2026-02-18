@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Terraform/OpenTofu IaC project that provisions an Oracle Cloud Infrastructure (OCI) Always Free tier environment. Default deployment: ARM compute + block storage + NLB. Optional modules: MySQL HeatWave (`enable_mysql`), S3-compatible object storage (`enable_object_storage`), utilization monitoring, and budget alerts.
+Terraform/OpenTofu IaC project that provisions an Oracle Cloud Infrastructure (OCI) Always Free tier environment. Default deployment: ARM compute + block storage. Optional modules: MySQL HeatWave (`enable_mysql`), S3-compatible object storage (`enable_object_storage`), utilization monitoring, and budget alerts.
 
 ## Commands
 
@@ -123,7 +123,6 @@ These are the hard limits. This project's defaults are tuned to maximize free re
 | **Object Storage** | 20 GB combined (Always Free account) or 10 GB/tier = 30 GB (paid account) | Off (`enable_object_storage`) |
 | **Object Storage API** | 50,000 requests/month | N/A |
 | **MySQL HeatWave** | 1 DB system, 50 GB data + 50 GB backup | Off (`enable_mysql`) |
-| **Network Load Balancer** | 1 NLB | 1 NLB (when `enable_public_access = true`) |
 | **VCN** | 2 VCNs | 1 VCN |
 | **Outbound Data** | 10 TB/month | N/A |
 | **Monitoring Alarms** | Unlimited (free) | 3 idle + 2 high-util (optional, off by default) |
@@ -156,7 +155,6 @@ terraform/
 │   ├── oci-compute/       # ARM VM.Standard.A1.Flex instance
 │   ├── oci-storage/       # Block volume + attachment
 │   ├── oci-mysql-heatwave/# Always Free MySQL with optional HeatWave
-│   ├── oci-nlb/           # Network Load Balancer (stable public IP for instance)
 │   ├── oci-object-storage/# S3-compatible bucket with auto-tiering/lifecycle
 │   ├── oci-monitoring/    # Idle-detection & high-utilization alarms (reclaim prevention)
 │   └── oci-budget-alerts/ # Cost monitoring at 50%/80%/100% thresholds
@@ -169,10 +167,9 @@ terraform/
 - MySQL (`enable_mysql`, default `false`) and object storage (`enable_object_storage`, default `false`) are optional modules
 - Block storage is conditionally created via `count` (`enable_block_volume` variable, default `true`)
 - Private subnet is only created when `enable_mysql = true`
-- `enable_public_access` (default `true`) is the master switch for public-facing services: when `false`, NLB is not created, no inbound TCP/UDP ports are opened (security list, iptables, NLB all go dark), only SSH via `ssh_source_cidr` remains
-- `additional_tcp_ports` (default `[443]`) and `additional_udp_ports` (default `[]`) customize which ports are open when public access is enabled; same lists feed VCN security list, instance iptables (cloud-init), and NLB forwarding
+- `enable_public_access` (default `true`) is the master switch for public-facing services: when `false`, no inbound TCP/UDP ports are opened (security list and iptables go dark), only SSH via `ssh_source_cidr` remains
+- `additional_tcp_ports` (default `[443]`) and `additional_udp_ports` (default `[]`) customize which ports are open when public access is enabled; same lists feed VCN security list and instance iptables (cloud-init)
 - MySQL and object storage have `prevent_destroy` lifecycle rules (when enabled)
-- NLB sits in front of the compute instance providing a stable public IP that survives instance recreation
 - MySQL is in a private subnet (no internet gateway route) — access via SSH tunnel from the instance
 - Compute stays in the public subnet because OCI NAT gateways are not free tier — a private-subnet instance couldn't reach the internet for updates
 - Boot volume has a Bronze backup policy (weekly, 4 retained) — fits within 5 free backups
@@ -221,7 +218,7 @@ All secrets live in `.env` (gitignored, `chmod 600`), never in `.auto.tfvars` or
 
 ### Network Security
 
-Only **443/TCP (HTTPS)** is open by default via `enable_public_access = true`. Set `enable_public_access = false` for private mode — no NLB, no inbound ports, SSH only.
+Only **443/TCP (HTTPS)** is open by default via `enable_public_access = true`. Set `enable_public_access = false` for private mode — no inbound ports, SSH only.
 
 **SSH (port 22) is blocked** until `ssh_source_cidr` is set to a specific IP CIDR. Use `just ssh-allow` to open SSH from your current IP and `just ssh-revoke` to close it. SSH is independent of `enable_public_access`.
 

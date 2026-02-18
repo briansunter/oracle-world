@@ -4,7 +4,6 @@
 #   - Network: VCN, public subnet, internet gateway, security list
 #   - Compute: VM.Standard.A1.Flex ARM instance (4 OCPUs, 24 GB RAM)
 #   - Storage: 50 GB boot volume + 150 GB block volume
-#   - NLB: Network Load Balancer with stable public IP (when enable_public_access = true)
 #
 # Optional modules (off by default):
 #   - MySQL: Always Free HeatWave cluster (enable_mysql = true)
@@ -83,7 +82,7 @@ provider "oci" {
 
 locals {
   # When public access is disabled, no inbound ports are opened anywhere:
-  # VCN security list, instance iptables (cloud-init), and NLB.
+  # VCN security list and instance iptables (cloud-init).
   # Only SSH (via ssh_source_cidr) remains available.
   tcp_ports = var.enable_public_access ? var.additional_tcp_ports : []
   udp_ports = var.enable_public_access ? var.additional_udp_ports : []
@@ -287,29 +286,6 @@ module "object_storage" {
   enable_lifecycle_policy = var.object_storage_archive_enabled
   archive_days            = var.object_storage_archive_days
   delete_after_days       = var.object_storage_delete_days
-
-  tags = {
-    environment = "prod"
-    managed_by  = "terraform"
-  }
-}
-
-# =============================================================================
-# Network Load Balancer (Always Free — 1 per tenancy)
-# Stable public IP in front of the compute instance.
-# The NLB IP survives instance recreation — no DNS updates needed.
-# MySQL stays private (VCN-only) — connect via SSH tunnel from the instance.
-# =============================================================================
-
-module "nlb" {
-  source = "../../modules/oci-nlb"
-  count  = var.enable_public_access ? 1 : 0
-
-  compartment_id = var.compartment_ocid
-  subnet_id      = module.network.subnet_id
-  nlb_name       = "${var.instance_name}-nlb"
-  backend_ip     = module.compute.private_ip
-  tcp_ports      = local.tcp_ports
 
   tags = {
     environment = "prod"

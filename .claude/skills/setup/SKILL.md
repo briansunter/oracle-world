@@ -86,8 +86,8 @@ Ask the user the following questions using `AskUserQuestion`. Group related ques
 - **Alert email**: Ask for their email address for budget and monitoring alerts. This is optional — if provided, budget alerts are automatically created and monitoring alerts can be enabled. If left blank, no alerts are configured.
 
 - **Public or private mode**: Ask whether the instance should be publicly accessible.
-  - **Public (default)**: Creates a Network Load Balancer with a stable public IP, opens port 443. Best for web apps, APIs, VPN endpoints.
-  - **Private**: No NLB, no inbound ports. SSH-only access. Best for dev boxes, background workers, SSH-only use.
+  - **Public (default)**: Opens port 443 on the instance. Best for web apps, APIs, VPN endpoints.
+  - **Private**: No inbound ports. SSH-only access. Best for dev boxes, background workers, SSH-only use.
 
 **Question group 2 — Optional modules and storage:**
 

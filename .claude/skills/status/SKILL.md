@@ -13,7 +13,7 @@ Show the current state of the deployed OCI infrastructure.
 1. Check if terraform state exists: `terraform -chdir=terraform/environments/oci-prod show` (if it fails, tell the user nothing is deployed yet)
 2. Run `terraform -chdir=terraform/environments/oci-prod output` to get all outputs
 3. Present a clean summary to the user:
-   - Instance IP (direct) and NLB IP (if public access enabled)
+   - Instance public IP
    - SSH connection command
    - MySQL connection info
    - Object Storage bucket name and S3 endpoint
