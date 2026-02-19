@@ -1,0 +1,19 @@
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+crash.log
+crash.*.log
+
+# Sensitive values
+*.auto.tfvars
+!*.auto.tfvars.example
+.env
+.env.bak.*
+
+# Nix / direnv
+.direnv/
+result
+
+# OS
+.DS_Store

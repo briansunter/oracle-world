@@ -1,0 +1,127 @@
+# OCI Production Environment Configuration
+#
+# Copy this file to oci-prod.auto.tfvars and fill in your values.
+# OCI authentication is handled by ~/.oci/config (standard OCI CLI format).
+
+# =============================================================================
+# Required Configuration
+# =============================================================================
+
+# OCI compartment OCID - where to create resources (using tenancy = root compartment)
+# Find with: oci iam compartment list (or use tenancy OCID from ~/.oci/config)
+compartment_ocid = ""
+
+# OCI user OCID - for S3-compatible credentials
+# Find with: grep user ~/.oci/config
+user_ocid = ""
+
+# Availability domain name
+# Find with: oci iam availability-domain list
+availability_domain = ""
+
+# SSH public key for instance access
+ssh_public_key = ""
+
+# =============================================================================
+# Optional Modules (all off by default except compute + block storage)
+# =============================================================================
+
+# MySQL HeatWave — Always Free, 50 GB. Creates a private subnet.
+# Requires TF_VAR_mysql_admin_password env var when enabled.
+# enable_mysql = true
+
+# S3-compatible Object Storage — 30 GB auto-tiered bucket.
+# enable_object_storage = true
+
+# =============================================================================
+# Optional Overrides (defaults in variables.tf)
+# =============================================================================
+
+# instance_name = "oci-free-tier"
+# ocpus = 4
+# memory_in_gbs = 24
+
+# Storage: Use full 200GB as boot volume (faster than block volume)
+# boot_volume_size_gb = 200
+# enable_block_volume = false
+
+# Object Storage: auto-archive lifecycle (disabled by default, only when enable_object_storage = true)
+# Moves objects to Archive tier after N days (90-day minimum retention, ~1hr restore)
+# object_storage_archive_enabled = false
+# object_storage_archive_days    = 180
+
+# =============================================================================
+# Monitoring & Budget Alerts
+# =============================================================================
+
+# Email for monitoring and budget alerts (optional — required when alerts are enabled)
+# When set, budget alerts are automatically created (50%/80%/100% thresholds + any charges).
+# alert_email = "you@example.com"
+
+# Monthly budget amount in USD (0 = alert on any charges - ideal for free tier)
+# budget_amount = 0
+
+# Idle detection alerts (reclaim prevention) — off by default.
+# Oracle reclaims Always Free instances when ALL of these hold over 7 days:
+#   CPU (95th pctl) < 20%, Network < 20%, Memory < 20% (A1 only)
+# These alarms evaluate a rolling 4-day window — giving you ~3 days to
+# generate load and prevent reclamation before Oracle's 7-day deadline.
+# enable_idle_alerts    = true
+# cpu_idle_threshold    = 20   # Match Oracle's 20% reclaim threshold
+# memory_idle_threshold = 20
+
+# High utilization alerts — disabled by default.
+# enable_high_utilization_alerts = false
+# cpu_high_threshold    = 90
+# memory_high_threshold = 90
+
+# =============================================================================
+# State Encryption
+# =============================================================================
+# Set TF_VAR_state_passphrase in .env (loaded by `just` recipes).
+# See .env.example for setup. Do NOT put the passphrase in this file.
+
+# =============================================================================
+# SSH Access
+# =============================================================================
+# SSH (port 22) is blocked by default. Set to your residential IP to enable.
+# Use `just my-ip` to get your current public IP.
+# Use `just ssh-allow` to auto-set this to your current IP and apply.
+#
+# ssh_source_cidr = "203.0.113.5/32"   # Your IP (just my-ip)
+
+# =============================================================================
+# Public Access
+# =============================================================================
+# When enabled (default): additional_tcp_ports open in VCN security list
+# + instance iptables (via cloud-init).
+# When disabled: no inbound ports — SSH only (via ssh_source_cidr).
+#
+# enable_public_access = true
+
+# =============================================================================
+# Firewall — Inbound Ports (only when enable_public_access = true)
+# =============================================================================
+# These open to 0.0.0.0/0 (the entire internet) in VCN security list
+# and instance iptables (cloud-init).
+# MySQL is private (VCN-only) — access via SSH tunnel from the instance.
+#
+# Common TCP ports:
+#   80    = HTTP
+#   443   = HTTPS (default)
+#   8080  = Alt HTTP
+#   8443  = Alt HTTPS
+#
+# Common UDP ports:
+#   51820 = WireGuard
+#
+# additional_tcp_ports = [443]
+# additional_udp_ports = [51820]
+
+# =============================================================================
+# Network — Private Subnet (only when enable_mysql = true)
+# =============================================================================
+# MySQL lives in a private subnet with no internet access.
+# Override the CIDR if 10.0.1.0/24 conflicts with your network.
+#
+# private_subnet_cidr = "10.0.1.0/24"
