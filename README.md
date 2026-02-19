@@ -10,7 +10,7 @@ OpenTofu modules for Oracle Cloud's [Always Free tier](https://docs.oracle.com/e
 | MySQL HeatWave | 50 GB, private subnet | Off |
 | Object Storage | 30 GB S3-compatible | Off |
 | Monitoring | Idle-detection alarms (reclaim prevention) | Off |
-| Budget Alerts | Email at 50% / 80% / 100% | Off |
+| Budget Alerts | Email on any spend + at 50% / 80% / 100% | Off |
 
 ## Quick Start
 
