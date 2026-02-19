@@ -8,8 +8,8 @@ import { GridBackground } from "../components/GridBackground";
 import { GlowText } from "../components/GlowText";
 
 const providers = [
-  { name: "Hetzner", price: "$20/mo", detail: "4 vCPU \u2022 16 GB" },
-  { name: "AWS EC2", price: "$98/mo", detail: "4 vCPU \u2022 16 GB" },
+  { name: "Hetzner", price: "$13/mo", detail: "8 vCPU \u2022 16 GB" },
+  { name: "AWS EC2", price: "$110/mo", detail: "4 vCPU \u2022 16 GB" },
   { name: "DigitalOcean", price: "$126/mo", detail: "4 vCPU \u2022 16 GB" },
 ];
 
