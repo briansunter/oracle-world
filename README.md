@@ -1,4 +1,6 @@
-![oracle-world: OpenTofu modules for Oracle Cloud's Always Free tier — one apply, production ready](docs/banner.png)
+<p align="center">
+  <img src="docs/banner.png" alt="oracle-world: OpenTofu modules for Oracle Cloud's Always Free tier — one apply, production ready" width="320">
+</p>
 
 # oracle-world
 
