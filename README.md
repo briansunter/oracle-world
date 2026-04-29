@@ -1,3 +1,5 @@
+![oracle-world: OpenTofu modules for Oracle Cloud's Always Free tier — one apply, production ready](docs/banner.png)
+
 # oracle-world
 
 OpenTofu modules for Oracle Cloud's [Always Free tier](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm). One `apply` gives you a 4-core ARM box with 24 GB RAM, 200 GB storage, and optional MySQL, S3 storage, monitoring, and budget alerts.
@@ -143,37 +145,7 @@ enable_block_volume = false
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────────┐
-│ VCN (10.0.0.0/16)                                        │
-│                                                          │
-│  ┌────────────────────────────────────────────────────┐  │
-│  │ Public Subnet (10.0.0.0/24)                        │  │
-│  │                                                    │  │
-│  │           ┌──────────┐                              │  │
-│  │           │ ARM      │                              │  │
-│  │           │ Instance │                              │  │
-│  │           │ 4C/24GB  │                              │  │
-│  │           └────┬─────┘                              │  │
-│  │                │                                    │  │
-│  └────────────────────┼───────────────────────────────┘  │
-│                       │ :3306 (optional)                 │
-│  ┌────────────────────┼───────────────────────────────┐  │
-│  │ Private Subnet — optional (enable_mysql = true)    │  │
-│  │                    ▼                               │  │
-│  │            ┌──────────────┐                        │  │
-│  │            │ MySQL        │                        │  │
-│  │            │ HeatWave     │                        │  │
-│  │            │ 50 GB        │                        │  │
-│  │            └──────────────┘                        │  │
-│  └────────────────────────────────────────────────────┘  │
-│                                                          │
-│  ┌──────────────┐  ┌──────────────────────────────────┐  │
-│  │ Block Volume │  │ Object Storage (optional)        │  │
-│  │ 150 GB       │  │ 30 GB S3-compatible              │  │
-│  └──────────────┘  └──────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────┘
-```
+![oracle-world architecture: VCN with public subnet hosting an ARM instance (4C/24GB), optional private subnet for MySQL HeatWave, plus block and object storage](docs/explainer.png)
 
 The instance is in a public subnet because OCI NAT gateways aren't free. MySQL (when enabled) goes in a private subnet with no internet route — access it via SSH tunnel.
 
