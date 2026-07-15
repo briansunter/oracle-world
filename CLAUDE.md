@@ -257,6 +257,18 @@ After `just apply`:
 1. **Block volume**: Automatically formatted (ext4) and mounted at `/data` on first boot via cloud-init. Persists across reboots via `/etc/fstab`.
 2. **MySQL access** (if enabled): `just mysql-tunnel` then connect with `mysql -h 127.0.0.1 -P 3306 -u admin -p`
 
+### Verified test deployment
+
+The test environment was applied and verified on 2026-07-14:
+
+- Compute is `VM.Standard.A1.Flex` at 2 OCPUs and 12 GB RAM.
+- Storage is 50 GB boot plus 150 GB block volume; the existing block volume was retained and reattached during the compute replacement.
+- MySQL HeatWave remains enabled in the private subnet; Oracle reported MySQL version 9.7.1 at verification time.
+- The OCI S3 backend (`terraform-state`) initialized successfully.
+- A post-apply `just plan` reported no changes, and `nix develop -c just check` passed.
+
+The observed MySQL version is informational only: Oracle manages upgrades for the Always Free MySQL service, so the configuration intentionally does not pin a version.
+
 ## Remote State Backend
 
 This environment is configured to use the OCI Object Storage S3 backend (`terraform-state`, key `oci-prod/terraform.tfstate`). Keep that backend active so state has locking, versioning, and offsite backup. Do not switch to local state for the deployed environment.

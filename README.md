@@ -155,6 +155,18 @@ SSH is blocked by default. Use `just ssh-allow` to whitelist your IP, `just ssh-
 
 Cloud-init on first boot opens iptables, hardens SSH, and enables unattended upgrades. Runs once — changes require instance recreation.
 
+### Verified test deployment
+
+The test environment was applied and verified on 2026-07-14:
+
+- Compute is `VM.Standard.A1.Flex` at 2 OCPUs and 12 GB RAM.
+- Storage is 50 GB boot plus 150 GB block volume; the existing block volume was retained and reattached during the compute replacement.
+- MySQL HeatWave remains enabled in the private subnet; Oracle reported MySQL version 9.7.1 at verification time.
+- The OCI S3 backend (`terraform-state`) initialized successfully.
+- A post-apply `just plan` reported no changes, and `nix develop -c just check` passed.
+
+The observed MySQL version is informational only: Oracle manages upgrades for the Always Free MySQL service, so the configuration intentionally does not pin a version.
+
 ## Modules
 
 | Module | What it does |
