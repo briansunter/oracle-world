@@ -1,0 +1,42 @@
+name: Validate
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v16
+
+      - name: Check Terraform formatting
+        run: nix develop -c just fmt-check
+
+      - name: Validate OpenTofu without a backend
+        working-directory: terraform/environments/oci-prod
+        env:
+          TF_VAR_state_passphrase: ci-validation-passphrase-not-a-secret
+        run: |
+          nix develop -c tofu init -backend=false -input=false
+          nix develop -c tofu validate
+
+      - name: Run TFLint
+        run: nix develop -c tflint --chdir=terraform/environments/oci-prod --no-color
+
+      - name: Check shell scripts
+        run: nix develop -c shellcheck generate-env.sh .claude/hooks/protect-env.sh
+
+      - name: Check JSON and whitespace
+        run: |
+          nix develop -c jq empty .claude/settings.json
+          nix develop -c just private-files
+          git diff --check

@@ -11,22 +11,24 @@ COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
 # Check file-based tools (Read, Edit, Write)
 if [[ -n "$FILE_PATH" ]]; then
     base=$(basename "$FILE_PATH")
-    if [[ "$base" == ".env" ]]; then
-        echo "Blocked: cannot access .env — secrets must stay hidden from Claude" >&2
-        exit 2
-    fi
+    case "$base" in
+        .env|.env.bak.*|*.auto.tfvars|terraform.tfstate|terraform.tfstate.*)
+            echo "Blocked: cannot access local secrets/state — sensitive values must stay hidden from Claude" >&2
+            exit 2
+            ;;
+    esac
 fi
 
 # Check Bash tool for commands that could read/leak .env contents
 if [[ "$TOOL" == "Bash" && -n "$COMMAND" ]]; then
     # Block: cat .env, source .env, less .env, head .env, tail .env, grep .env, etc.
     # Also block: . .env (dot-source)
-    if echo "$COMMAND" | grep -qE '(^|\s|&&|\|\||;)\s*(cat|head|tail|less|more|source|\.|\bsed\b|\bawk\b|\bgrep\b|strings|xxd|od|hexdump|base64|openssl)\s+.*\.env(\s|$|;|&&|\|)'; then
+    if echo "$COMMAND" | grep -qE '(^|\s|&&|\|\||;)\s*(cat|head|tail|less|more|source|\.|\bsed\b|\bawk\b|\bgrep\b|strings|xxd|od|hexdump|base64|openssl)\s+.*(\.env(\.bak\.[^[:space:];&|]+)?|[^[:space:]/]+\.auto\.tfvars|terraform\.tfstate(\.[^[:space:];&|]+)?)(\s|$|;|&&|\|)'; then
         echo "Blocked: cannot read .env via shell — secrets must stay hidden from Claude" >&2
         exit 2
     fi
-    # Block: echo $TF_VAR_state_passphrase, printenv TF_VAR_, echo $AWS_SECRET_ACCESS_KEY
-    if echo "$COMMAND" | grep -qE '(echo|printf|printenv|env|set)\s.*(TF_VAR_(state_passphrase|mysql_admin_password)|AWS_SECRET_ACCESS_KEY)'; then
+    # Block: echo $TF_VAR_state_passphrase, printenv TF_VAR_, echo AWS credentials
+    if echo "$COMMAND" | grep -qE '(echo|printf|printenv|env|set)\s.*(TF_VAR_(state_passphrase|mysql_admin_password)|AWS_(ACCESS_KEY_ID|SECRET_ACCESS_KEY))'; then
         echo "Blocked: cannot echo secret env vars — secrets must stay hidden from Claude" >&2
         exit 2
     fi

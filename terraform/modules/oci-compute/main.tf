@@ -28,6 +28,12 @@ terraform {
   }
 }
 
+# Any change to cloud-init must recreate the instance because cloud-init runs
+# only during first boot. This also keeps VCN rules and host iptables aligned.
+resource "terraform_data" "cloud_init_revision" {
+  input = var.user_data != "" ? sha256(var.user_data) : "disabled"
+}
+
 # =============================================================================
 # Data Sources
 # =============================================================================
@@ -77,55 +83,13 @@ resource "oci_core_instance" "main" {
   }
 
   agent_config {
+    # Keep management plugins disabled; they are not needed by this
+    # Always Free environment. Compute metrics remain enabled for alarms.
     is_management_disabled = true
-    is_monitoring_disabled = true
-    plugins_config {
-      desired_state = "DISABLED"
-      name          = "Vulnerability Scanning"
-    }
-    plugins_config {
-      desired_state = "DISABLED"
-      name          = "Oracle Java Management Service"
-    }
-    plugins_config {
-      desired_state = "DISABLED"
-      name          = "OS Management Service Agent"
-    }
-    plugins_config {
-      desired_state = "DISABLED"
-      name          = "Management Agent"
-    }
-    plugins_config {
-      desired_state = "ENABLED"
-      name          = "Custom Logs Monitoring"
-    }
-    plugins_config {
-      desired_state = "DISABLED"
-      name          = "Compute RDMA GPU Monitoring"
-    }
-    plugins_config {
-      desired_state = "ENABLED"
-      name          = "Compute Instance Run Command"
-    }
+    is_monitoring_disabled = false
     plugins_config {
       desired_state = "ENABLED"
       name          = "Compute Instance Monitoring"
-    }
-    plugins_config {
-      desired_state = "DISABLED"
-      name          = "Compute HPC RDMA Auto-Configuration"
-    }
-    plugins_config {
-      desired_state = "DISABLED"
-      name          = "Compute HPC RDMA Authentication"
-    }
-    plugins_config {
-      desired_state = "DISABLED"
-      name          = "Block Volume Management"
-    }
-    plugins_config {
-      desired_state = "DISABLED"
-      name          = "Bastion"
     }
   }
 
@@ -135,10 +99,7 @@ resource "oci_core_instance" "main" {
   freeform_tags = var.tags
 
   lifecycle {
-    ignore_changes = [
-      # Ignore changes to user_data after creation
-      metadata["user_data"],
-    ]
+    replace_triggered_by = [terraform_data.cloud_init_revision]
   }
 }
 

@@ -11,6 +11,10 @@
 # Find with: oci iam compartment list (or use tenancy OCID from ~/.oci/config)
 compartment_ocid = ""
 
+# OCI tenancy OCID - used for home-region discovery and root-scoped policies.
+# Leave empty only when compartment_ocid is the tenancy OCID (backwards-compatible fallback).
+tenancy_ocid = ""
+
 # OCI user OCID - for S3-compatible credentials
 # Find with: grep user ~/.oci/config
 user_ocid = ""
@@ -27,10 +31,12 @@ ssh_public_key = ""
 # =============================================================================
 
 # MySQL HeatWave — Always Free, 50 GB. Creates a private subnet.
+# MySQL version is managed and upgraded by Oracle; do not pin it in Terraform.
 # Requires TF_VAR_mysql_admin_password env var when enabled.
 # enable_mysql = true
 
-# S3-compatible Object Storage — 30 GB auto-tiered bucket.
+# S3-compatible Object Storage — 20 GB combined across tiers on the
+# Always Free-only profile. Keep all objects, including state, below 20 GB.
 # enable_object_storage = true
 
 # =============================================================================
@@ -38,8 +44,8 @@ ssh_public_key = ""
 # =============================================================================
 
 # instance_name = "oci-free-tier"
-# ocpus = 4
-# memory_in_gbs = 24
+# ocpus = 2
+# memory_in_gbs = 12
 
 # Storage: Use full 200GB as boot volume (faster than block volume)
 # boot_volume_size_gb = 200
@@ -64,8 +70,8 @@ ssh_public_key = ""
 # Idle detection alerts (reclaim prevention) — off by default.
 # Oracle reclaims Always Free instances when ALL of these hold over 7 days:
 #   CPU (95th pctl) < 20%, Network < 20%, Memory < 20% (A1 only)
-# These alarms evaluate a rolling 4-day window — giving you ~3 days to
-# generate load and prevent reclamation before Oracle's 7-day deadline.
+# These alarms evaluate a one-day metric window and repeat daily, giving you
+# time to generate load and prevent reclamation before Oracle's 7-day deadline.
 # enable_idle_alerts    = true
 # cpu_idle_threshold    = 20   # Match Oracle's 20% reclaim threshold
 # memory_idle_threshold = 20

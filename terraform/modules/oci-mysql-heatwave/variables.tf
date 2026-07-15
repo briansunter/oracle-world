@@ -45,8 +45,15 @@ variable "admin_password" {
   sensitive   = true
 
   validation {
-    condition     = length(var.admin_password) >= 8 && length(var.admin_password) <= 32
-    error_message = "admin_password must be between 8 and 32 characters"
+    condition = (
+      length(var.admin_password) >= 8 &&
+      length(var.admin_password) <= 32 &&
+      can(regex("[A-Z]", var.admin_password)) &&
+      can(regex("[a-z]", var.admin_password)) &&
+      can(regex("[0-9]", var.admin_password)) &&
+      can(regex("[^a-zA-Z0-9]", var.admin_password))
+    )
+    error_message = "admin_password must be 8-32 characters with uppercase, lowercase, number, and special character"
   }
 }
 

@@ -14,6 +14,11 @@ output "public_ip" {
   value       = module.compute.public_ip
 }
 
+output "instance_ip" {
+  description = "Deprecated alias for public_ip"
+  value       = module.compute.public_ip
+}
+
 output "private_ip" {
   description = "Private IP address of the instance"
   value       = module.compute.private_ip
@@ -121,6 +126,16 @@ output "mysql_port" {
   value       = length(module.mysql) > 0 ? module.mysql[0].port : null
 }
 
+output "mysql_admin_username" {
+  description = "MySQL administrator username"
+  value       = length(module.mysql) > 0 ? module.mysql[0].admin_username : null
+}
+
+output "mysql_version" {
+  description = "Current Oracle-managed MySQL version"
+  value       = length(module.mysql) > 0 ? module.mysql[0].mysql_version : null
+}
+
 output "mysql_connection_string" {
   description = "MySQL connection string"
   value       = length(module.mysql) > 0 ? module.mysql[0].connection_string : null
@@ -143,7 +158,7 @@ output "mysql_summary" {
 }
 
 # =============================================================================
-# Object Storage Outputs (Always Free - Paid Account: 30 GB total)
+# Object Storage Outputs (Always Free-only profile: 20 GB combined)
 # =============================================================================
 
 output "object_storage_bucket_name" {
@@ -180,6 +195,7 @@ output "object_storage_summary" {
 output "s3_access_key" {
   description = "S3-compatible access key (use as AWS_ACCESS_KEY_ID)"
   value       = length(module.object_storage) > 0 ? module.object_storage[0].s3_access_key : null
+  sensitive   = true
 }
 
 output "s3_secret_key" {
@@ -198,7 +214,7 @@ output "next_steps" {
     SSH:        ssh ubuntu@${module.compute.public_ip}
     ${length(module.mysql) > 0 ? "MySQL:      ssh -L 3306:${module.mysql[0].ip_address}:3306 ubuntu@${module.compute.public_ip}" : ""}
     ${length(module.object_storage) > 0 ? "S3:         ${module.object_storage[0].s3_endpoint}" : ""}
-    Monitoring: ${length(module.monitoring) > 0 ? "${module.monitoring[0].alarm_count} alarms (${var.alert_email})" : "disabled"}
+    Monitoring: ${length(module.monitoring) > 0 ? "${module.monitoring[0].alarm_count} alarms enabled" : "disabled"}
   EOT
 }
 

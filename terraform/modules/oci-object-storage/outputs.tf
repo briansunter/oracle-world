@@ -111,6 +111,7 @@ output "par_expiry" {
 output "s3_access_key" {
   description = "S3-compatible access key"
   value       = length(oci_identity_customer_secret_key.s3_access) > 0 ? oci_identity_customer_secret_key.s3_access[0].id : null
+  sensitive   = true
 }
 
 output "s3_secret_key" {
@@ -133,8 +134,8 @@ output "summary" {
     Auto-tiering: ${oci_objectstorage_bucket.main.auto_tiering}
     Public Access: ${oci_objectstorage_bucket.main.access_type == "ObjectRead" ? "Yes" : "No"}
 
-    Always Free Limits (Pay As You Go):
-    - 10 GB Standard + 10 GB InfrequentAccess + 10 GB Archive = 30 GB
+    Always Free-only Limits:
+    - 20 GB combined across Standard, InfrequentAccess, and Archive
     - 50,000 API requests/month
   EOT
 }

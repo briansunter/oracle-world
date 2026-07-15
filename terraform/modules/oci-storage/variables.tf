@@ -49,8 +49,8 @@ variable "volume_size_gb" {
   default     = 150
 
   validation {
-    condition     = var.volume_size_gb >= 50 && var.volume_size_gb <= 32768
-    error_message = "volume_size_gb must be between 50 and 32768 GB"
+    condition     = var.volume_size_gb >= 50 && var.volume_size_gb <= 200
+    error_message = "volume_size_gb must be between 50 and 200 GB for the Always Free tier"
   }
 }
 
@@ -59,30 +59,13 @@ variable "volume_size_gb" {
 # =============================================================================
 
 variable "vpus_per_gb" {
-  description = "VPUs per GB: 0 = Lower Cost, 10 = Balanced, 20 = Higher Performance"
+  description = "VPUs per GB; Always Free block volumes use the Lower Cost level"
   type        = number
   default     = 0
 
   validation {
-    condition     = contains([0, 10, 20], var.vpus_per_gb)
-    error_message = "vpus_per_gb must be 0, 10, or 20"
-  }
-}
-
-variable "autotune_enabled" {
-  description = "Enable performance auto-tuning"
-  type        = bool
-  default     = false
-}
-
-variable "max_vpus_per_gb" {
-  description = "Maximum VPUs per GB for auto-tuning"
-  type        = number
-  default     = 20
-
-  validation {
-    condition     = contains([10, 20], var.max_vpus_per_gb)
-    error_message = "max_vpus_per_gb must be 10 or 20"
+    condition     = var.vpus_per_gb == 0
+    error_message = "vpus_per_gb must be 0 (Lower Cost) for the Always Free tier"
   }
 }
 

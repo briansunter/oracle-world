@@ -65,8 +65,8 @@ resource "oci_ons_subscription" "email" {
 # The MQL query window is 1 day ([1d]) — the OCI maximum interval.
 # Combined with a 1-hour pending_duration, this means the alarm fires when
 # the metric stays below the threshold across the latest 24-hour window.
-# Repeat notifications every 6 hours re-alert while still idle, giving you
-# ongoing warnings well before Oracle's 7-day reclaim deadline.
+# Repeat notifications daily so persistent alarms remain comfortably below
+# the Always Free Notifications email quota.
 
 # CPU idle: fires when 1-day 95th-percentile CPU stays below threshold.
 # Matches Oracle's own 95th-percentile evaluation method.
@@ -83,7 +83,7 @@ resource "oci_monitoring_alarm" "cpu_idle" {
   query = "CpuUtilization[1d]{resourceId = \"${var.instance_id}\"}.percentile(0.95) < ${var.cpu_idle_threshold}"
 
   pending_duration             = "PT1H"
-  repeat_notification_duration = "PT6H"
+  repeat_notification_duration = "PT24H"
   message_format               = "ONS_OPTIMIZED"
   destinations                 = [oci_ons_notification_topic.monitoring.id]
 
@@ -111,7 +111,7 @@ resource "oci_monitoring_alarm" "memory_idle" {
   query = "MemoryUtilization[1d]{resourceId = \"${var.instance_id}\"}.mean() < ${var.memory_idle_threshold}"
 
   pending_duration             = "PT1H"
-  repeat_notification_duration = "PT6H"
+  repeat_notification_duration = "PT24H"
   message_format               = "ONS_OPTIMIZED"
   destinations                 = [oci_ons_notification_topic.monitoring.id]
 
@@ -141,7 +141,7 @@ resource "oci_monitoring_alarm" "network_idle" {
   query = "NetworksBytesIn[1d]{resourceId = \"${var.instance_id}\"}.mean() < 1024"
 
   pending_duration             = "PT1H"
-  repeat_notification_duration = "PT6H"
+  repeat_notification_duration = "PT24H"
   message_format               = "ONS_OPTIMIZED"
   destinations                 = [oci_ons_notification_topic.monitoring.id]
 
@@ -173,7 +173,7 @@ resource "oci_monitoring_alarm" "cpu_high" {
   query = "CpuUtilization[5m]{resourceId = \"${var.instance_id}\"}.mean() > ${var.cpu_high_threshold}"
 
   pending_duration             = "PT15M"
-  repeat_notification_duration = "PT1H"
+  repeat_notification_duration = "PT24H"
   message_format               = "ONS_OPTIMIZED"
   destinations                 = [oci_ons_notification_topic.monitoring.id]
 
@@ -195,7 +195,7 @@ resource "oci_monitoring_alarm" "memory_high" {
   query = "MemoryUtilization[5m]{resourceId = \"${var.instance_id}\"}.mean() > ${var.memory_high_threshold}"
 
   pending_duration             = "PT15M"
-  repeat_notification_duration = "PT1H"
+  repeat_notification_duration = "PT24H"
   message_format               = "ONS_OPTIMIZED"
   destinations                 = [oci_ons_notification_topic.monitoring.id]
 

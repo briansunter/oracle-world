@@ -15,5 +15,10 @@ crash.*.log
 .direnv/
 result
 
+# Video build artifacts (video source lives on the separate docs branch)
+video/node_modules/
+video/out/
+video/.cache/
+
 # OS
 .DS_Store

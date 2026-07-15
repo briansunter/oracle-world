@@ -38,7 +38,7 @@ tofu -chdir=terraform/environments/oci-prod plan
 tofu -chdir=terraform/environments/oci-prod apply
 ```
 
-Prefer `tofu` (OpenTofu) over `terraform`. Both work interchangeably.
+OpenTofu is required. The configuration uses OpenTofu state encryption, which the Terraform CLI cannot parse. Use `tofu` through the provided `just` recipes.
 
 ## Oracle Cloud Free Tier Setup
 
@@ -103,7 +103,7 @@ cp terraform/environments/oci-prod/oci-prod.auto.tfvars.example \
    terraform/environments/oci-prod/oci-prod.auto.tfvars
 # Edit oci-prod.auto.tfvars with your values
 
-# (Recommended) Set up a remote state backend BEFORE first init — see "Remote State Backend" below
+# The OCI S3 remote state backend is already configured in main.tf.
 just init
 just plan
 just apply
@@ -117,16 +117,16 @@ These are the hard limits. This project's defaults are tuned to maximize free re
 
 | Resource | Free Limit | This Project's Default |
 |----------|-----------|----------------------|
-| **ARM Compute (A1.Flex)** | 4 OCPUs, 24 GB RAM total (splittable across up to 4 instances) | 1 instance: 4 OCPUs, 24 GB |
-| **AMD Compute (E2.1.Micro)** | 2 instances, 1/8 OCPU + 1 GB each | Not used (shape is selectable) |
+| **ARM Compute (A1.Flex)** | 2 OCPUs, 12 GB RAM total (splittable across instances) | 1 instance: 2 OCPUs, 12 GB |
+| **AMD Compute (E2.1.Micro)** | 2 instances, 1/8 OCPU + 1 GB each | Not used; this environment supports A1 only |
 | **Boot + Block Volume** | 200 GB combined, 5 backups | 50 GB boot + 150 GB block = 200 GB |
-| **Object Storage** | 20 GB combined (Always Free account) or 10 GB/tier = 30 GB (paid account) | Off (`enable_object_storage`) |
+| **Object Storage** | 20 GB combined across tiers (Always Free-only profile) | Off (`enable_object_storage`) |
 | **Object Storage API** | 50,000 requests/month | N/A |
-| **MySQL HeatWave** | 1 DB system, 50 GB data + 50 GB backup | Off (`enable_mysql`) |
+| **MySQL HeatWave** | 1 DB system, 50 GB data + 50 GB backup; Oracle-managed latest version | Off (`enable_mysql`) |
 | **VCN** | 2 VCNs | 1 VCN |
 | **Outbound Data** | 10 TB/month | N/A |
-| **Monitoring Alarms** | Unlimited (free) | 3 idle + 2 high-util (optional, off by default) |
-| **Budget Alerts** | Unlimited | 4 rules (50%/80%/100%/any-spend) |
+| **Monitoring** | 500M ingestion / 1B retrieval data points; 1,000 email notifications/month | 3 idle + 2 high-util alarms (optional, off by default) |
+| **Budget Alerts** | Spend guardrail service | 4 rules (50%/80%/100%/any-spend) |
 
 Full reference: https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm
 
@@ -134,9 +134,9 @@ Full reference: https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_top
 
 - **Home region only**: Always Free resources can only be created in your home region
 - **Capacity limits**: ARM instances may be unavailable in some regions due to demand — retry later or try during off-peak hours
-- **Object Storage tiers**: Always Free-only accounts get 20 GB combined; paid/upgraded accounts get 10 GB per tier (30 GB total)
+- **Object Storage quota**: Keep all Object Storage data, including the remote-state bucket, below 20 GB combined
 - **Budget minimum**: OCI API requires budget amount >= $1, so the module uses `max(1, var.budget_amount)` even when you set `budget_amount = 0` — an additional alert at $0.01 catches any actual charges
-- **Idle instance reclaim**: Oracle reclaims Always Free instances deemed "idle" when ALL of these hold over a rolling 7-day window: CPU 95th percentile < 20%, network utilization < 20%, memory utilization < 20% (A1 shapes only). Set `enable_idle_alerts = true` to get email warnings after ~4 days of low utilization — giving you ~3 days to act before reclamation
+- **Idle instance reclaim**: Oracle reclaims Always Free instances deemed "idle" when ALL of these hold over a rolling 7-day window: CPU 95th percentile < 20%, network utilization < 20%, memory utilization < 20% (A1 shapes only). Set `enable_idle_alerts = true` to get daily warnings after the alarm's one-day metric window, leaving time to act before reclamation
 - **prevent_destroy**: MySQL and object storage buckets have `prevent_destroy = true` lifecycle rules to prevent accidental deletion. Remove these blocks manually before running `tofu destroy` on those resources
 
 ## Architecture
@@ -173,8 +173,8 @@ terraform/
 - MySQL is in a private subnet (no internet gateway route) — access via SSH tunnel from the instance
 - Compute stays in the public subnet because OCI NAT gateways are not free tier — a private-subnet instance couldn't reach the internet for updates
 - Boot volume has a Bronze backup policy (weekly, 4 retained) — fits within 5 free backups
-- Compute shape validation restricts to `VM.Standard.A1.Flex` and `VM.Standard.E2.1.Micro` (both free tier eligible)
-- Variable validations enforce free tier boundaries (OCPUs 1-4, memory 1-24 GB, boot volume 47-200 GB)
+- Compute shape validation restricts this environment to `VM.Standard.A1.Flex`
+- Variable validations enforce current free tier boundaries (OCPUs 1-2, memory 1-12 GB, boot volume 47-200 GB)
 - Cloud-init on first boot opens iptables (OCI Ubuntu blocks inbound by default), hardens SSH, enables unattended upgrades
 
 ## Provider
@@ -188,14 +188,15 @@ terraform/
    ./generate-env.sh              # interactive — prompts for MySQL
    ./generate-env.sh --mysql      # non-interactive, include MySQL password
    ./generate-env.sh --no-mysql   # non-interactive, skip MySQL password
+   ./generate-env.sh --add-mysql  # append only a MySQL password to existing .env
    ```
    The script generates `TF_VAR_state_passphrase` (always) and `TF_VAR_mysql_admin_password` (when MySQL enabled) using `openssl rand`. The `.env` file is gitignored, `chmod 600`, and loaded automatically by `just` via `set dotenv-load`.
 
 2. Copy `terraform/environments/oci-prod/oci-prod.auto.tfvars.example` → `oci-prod.auto.tfvars`
-3. Fill in required values: `compartment_ocid`, `user_ocid`, `availability_domain`, `ssh_public_key`
+3. Fill in `compartment_ocid`, `availability_domain`, and `ssh_public_key`. Add `tenancy_ocid` for home-region discovery and `user_ocid` when enabling Object Storage (the setup recipe fills both automatically).
 4. Optional: set `enable_mysql = true` and `enable_object_storage = true` for those modules
 5. State is encrypted at rest via OpenTofu state encryption (AES-GCM + PBKDF2, `enforced = true`). Back up your `.env` — losing the passphrase means losing access to state.
-6. (Recommended) Set up a remote backend for state locking, versioning, and offsite backup — see "Remote State Backend" section below.
+6. Keep the configured OCI S3 backend active for state locking, versioning, and offsite backup.
 
 ## Security Defaults
 
@@ -213,7 +214,7 @@ All secrets live in `.env` (gitignored, `chmod 600`), never in `.auto.tfvars` or
 - **State encryption**: OpenTofu encrypts state and plan files at rest (AES-GCM + PBKDF2). Enforced — unencrypted state is rejected.
 - **`.env` is never read by Claude**: A `PreToolUse` hook (`.claude/hooks/protect-env.sh`) blocks Read, Edit, Write, and Bash tools from accessing `.env` or echoing `TF_VAR_` secret values.
 - **`generate-env.sh` handles all secret creation**: The script generates secrets internally and writes directly to `.env`. Claude calls the script but never sees the output values.
-- **Backup `.env`**: Losing the passphrase means losing access to your Terraform state. `--force` creates a timestamped backup before overwriting.
+- **Backup `.env`**: Losing the passphrase means losing access to your OpenTofu state. `--force` refuses to overwrite an initialized environment; use `--add-mysql` to append a missing MySQL password safely.
 - **Never regenerate `.env` with existing state**: The passphrase encrypts state files. Regenerating creates a new passphrase that cannot decrypt existing state. To add new secrets (e.g., MySQL password), append to `.env` instead of regenerating.
 
 ### Network Security
@@ -258,7 +259,7 @@ After `just apply`:
 
 ## Remote State Backend
 
-Local state works for solo use but has no locking, versioning, or offsite backup. **Recommended: set up a remote backend BEFORE your first `just init`** so state goes directly to the remote backend and never exists only locally. Migrating later works but is an extra step that can be avoided.
+This environment is configured to use the OCI Object Storage S3 backend (`terraform-state`, key `oci-prod/terraform.tfstate`). Keep that backend active so state has locking, versioning, and offsite backup. Do not switch to local state for the deployed environment.
 
 ### Recommended Options
 
@@ -274,7 +275,7 @@ Local state works for solo use but has no locking, versioning, or offsite backup
 
 ### Migration
 
-Replace the commented backend in `main.tf` → run `just init` → OpenTofu prompts to migrate local state to the remote backend. State encryption (client-side) works with all backends — you get double encryption.
+If the backend configuration is ever changed, restore the active S3 block in `main.tf` and run `just init`. State encryption (client-side) works with the backend, so the passphrase remains required.
 
 ### Important
 
@@ -301,7 +302,7 @@ Slash commands for common operations (defined in `.claude/skills/`):
 
 - All skills must use `just` recipes (not raw `tofu`) to ensure `.env` secrets are loaded via `set dotenv-load`.
 - Skills must never read, cat, source, or inspect `.env` — a `PreToolUse` hook blocks this. Use `test -f .env` to check existence only.
-- Secret generation is handled exclusively by `./generate-env.sh` — skills call it with `--mysql`/`--no-mysql` flags but never see the generated values.
+- Secret generation is handled exclusively by `./generate-env.sh` — skills call it with `--mysql`/`--no-mysql`/`--add-mysql` flags but never see the generated values.
 
 ## Reference Links
 

@@ -5,25 +5,64 @@
 #   ./generate-env.sh              # Interactive (prompts for MySQL)
 #   ./generate-env.sh --mysql      # Non-interactive, include MySQL password
 #   ./generate-env.sh --no-mysql   # Non-interactive, skip MySQL password
+#   ./generate-env.sh --add-mysql  # Append only a MySQL password to an existing .env
 #   ./generate-env.sh --force ...  # Overwrite existing .env (requires confirmation)
 set -euo pipefail
+umask 077
 
 ENV_FILE=".env"
+STATE_DIR="terraform/environments/oci-prod"
 force=false
 mysql_flag=""
+add_mysql=false
 
 for arg in "$@"; do
     case "$arg" in
         --mysql)    mysql_flag="yes" ;;
         --no-mysql) mysql_flag="no" ;;
+        --add-mysql) add_mysql=true ;;
         --force)    force=true ;;
         *) echo "Unknown option: $arg"; exit 1 ;;
     esac
 done
 
+generate_mysql_password() {
+    local random_part special_chars special_byte special_index special_char
+    random_part="$(openssl rand -hex 8)"
+    special_chars='!@#^&'
+    special_byte="$(openssl rand -hex 1)"
+    special_index=$((16#$special_byte % ${#special_chars}))
+    special_char="${special_chars:$special_index:1}"
+    printf 'A%s a1%s' "$random_part" "$special_char" | tr -d ' '
+}
+
+if [ "$add_mysql" = true ]; then
+    if [ ! -f "$ENV_FILE" ]; then
+        echo "Error: .env not found. Generate it first with ./generate-env.sh --no-mysql."
+        exit 1
+    fi
+    if grep -q '^TF_VAR_mysql_admin_password=' "$ENV_FILE"; then
+        echo "Error: TF_VAR_mysql_admin_password already exists in .env."
+        exit 1
+    fi
+    mysql_password="$(generate_mysql_password)"
+    {
+        printf '\n# MySQL admin password (8-32 chars, uppercase + lowercase + number + special)\n'
+        printf 'TF_VAR_mysql_admin_password="%s"\n' "$mysql_password"
+    } >> "$ENV_FILE"
+    chmod 600 "$ENV_FILE"
+    echo "Appended a generated MySQL admin password to .env (value hidden)."
+    exit 0
+fi
+
 # Safety: never silently overwrite
 if [ -f "$ENV_FILE" ]; then
     if [ "$force" = true ]; then
+        if [ -d "$STATE_DIR/.terraform" ] || compgen -G "$STATE_DIR/terraform.tfstate*" >/dev/null; then
+            echo "Refusing to regenerate .env: OpenTofu has already been initialized or state exists."
+            echo "Append only the missing secret to .env; never replace the state passphrase."
+            exit 1
+        fi
         # Even with --force, back up first
         backup="${ENV_FILE}.bak.$(date +%s)"
         cp "$ENV_FILE" "$backup"
@@ -31,7 +70,8 @@ if [ -f "$ENV_FILE" ]; then
     else
         echo ".env already exists. To regenerate:"
         echo "  ./generate-env.sh --force          # backs up existing, then overwrites"
-        echo "  ./generate-env.sh --force --mysql   # same, with MySQL password"
+        echo "  ./generate-env.sh --mysql          # create a new .env with MySQL password"
+        echo "  ./generate-env.sh --add-mysql      # append MySQL password to an existing .env"
         exit 1
     fi
 fi
@@ -54,7 +94,7 @@ EOF
 if [[ "$mysql_flag" =~ ^[Yy](es)?$ ]]; then
     # Generate a MySQL-compatible password: mixed case + digits + special char
     # OCI requires: 8-32 chars, uppercase, lowercase, number, special char
-    mysql_password="$(openssl rand -base64 18 | tr -d '/+=' | head -c 20)$(echo '!@#^&' | fold -w1 | shuf | head -1)$(openssl rand -hex 1 | tr '[:lower:]' '[:upper:]')"
+    mysql_password="$(generate_mysql_password)"
     cat >> "$ENV_FILE" <<EOF
 
 # MySQL admin password (8-32 chars, uppercase + lowercase + number + special)

@@ -17,7 +17,8 @@
 #     volume_size_gb      = 150
 #   }
 #
-# Note: Formatting and mounting is done by the user after creation, not Terraform.
+# Note: Formatting and mounting is performed by the environment cloud-init
+# adapter after the attachment is available.
 
 terraform {
   required_providers {
@@ -41,15 +42,6 @@ resource "oci_core_volume" "main" {
   # VPUs per GB: 0 = Lower Cost, 10 = Balanced, 20 = Higher Performance
   # Always Free tier: 200 GB total block storage, 0 VPUs (Lower Cost)
   vpus_per_gb = var.vpus_per_gb
-
-  # Auto-tune performance (only include if enabled)
-  dynamic "autotune_policies" {
-    for_each = var.autotune_enabled ? [1] : []
-    content {
-      autotune_type   = "PERFORMANCE_BASED"
-      max_vpus_per_gb = var.max_vpus_per_gb
-    }
-  }
 
   freeform_tags = var.tags
 }

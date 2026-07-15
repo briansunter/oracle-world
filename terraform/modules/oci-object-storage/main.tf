@@ -1,8 +1,8 @@
 # OCI Object Storage Module
 # Creates Object Storage buckets for the Always Free tier
 #
-# Always Free Object Storage limits (Pay As You Go account):
-#   - 10 GB Standard + 10 GB InfrequentAccess + 10 GB Archive = 30 GB total
+# Always Free-only account limits:
+#   - 20 GB combined across Standard, InfrequentAccess, and Archive tiers
 #   - 50,000 API requests per month
 #
 # This module provisions:
@@ -42,6 +42,10 @@ data "oci_objectstorage_namespace" "ns" {
   compartment_id = var.compartment_id
 }
 
+data "oci_identity_compartment" "target" {
+  id = var.compartment_id
+}
+
 # =============================================================================
 # Object Storage Bucket
 # =============================================================================
@@ -73,10 +77,9 @@ resource "oci_objectstorage_bucket" "main" {
 
   freeform_tags = var.tags
 
-  # Prevent accidental deletion - uncomment to protect from destroy
-  # lifecycle {
-  #   prevent_destroy = true
-  # }
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 # =============================================================================
@@ -84,12 +87,15 @@ resource "oci_objectstorage_bucket" "main" {
 # =============================================================================
 
 locals {
-  prefix_filter = var.lifecycle_prefix != "" ? [var.lifecycle_prefix] : []
+  prefix_filter         = var.lifecycle_prefix != "" ? [var.lifecycle_prefix] : []
+  lifecycle_enabled     = var.enable_lifecycle_policy && (var.infrequent_access_days > 0 || var.archive_days > 0 || var.delete_after_days > 0)
+  policy_compartment_id = var.policy_compartment_id != "" ? var.policy_compartment_id : var.compartment_id
+  policy_scope          = can(regex("^ocid1\\.tenancy\\.oc", var.compartment_id)) ? "tenancy" : "compartment ${data.oci_identity_compartment.target.name}"
 }
 
 # Move objects to InfrequentAccess tier after specified days
 resource "oci_objectstorage_object_lifecycle_policy" "main" {
-  count = var.enable_lifecycle_policy ? 1 : 0
+  count = local.lifecycle_enabled ? 1 : 0
 
   namespace = data.oci_objectstorage_namespace.ns.namespace
   bucket    = oci_objectstorage_bucket.main.name
@@ -177,12 +183,13 @@ resource "oci_identity_customer_secret_key" "s3_access" {
 # =============================================================================
 
 resource "oci_identity_policy" "object_storage_lifecycle" {
-  compartment_id = var.compartment_id
-  name           = "object-storage-lifecycle-policy"
+  count          = local.lifecycle_enabled ? 1 : 0
+  compartment_id = local.policy_compartment_id
+  name           = "${var.bucket_name}-lifecycle-policy"
   description    = "Allow Object Storage service to manage objects for lifecycle policies"
 
   statements = [
-    "Allow service objectstorage-${var.region} to manage object-family in tenancy"
+    "Allow service objectstorage-${var.region} to manage object-family in ${local.policy_scope}"
   ]
 
   freeform_tags = var.tags

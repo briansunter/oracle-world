@@ -168,6 +168,17 @@ variable "region" {
   type        = string
 }
 
+variable "policy_compartment_id" {
+  description = "Root tenancy OCID where the lifecycle IAM policy is created (defaults to compartment_id for standalone module use)"
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.policy_compartment_id == "" || can(regex("^ocid1\\.tenancy\\.oc", var.policy_compartment_id))
+    error_message = "policy_compartment_id must be empty or a valid tenancy OCID"
+  }
+}
+
 variable "user_id" {
   description = "OCI user OCID for S3-compatible Customer Secret Key credentials"
   type        = string

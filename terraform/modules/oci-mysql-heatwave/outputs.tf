@@ -19,6 +19,11 @@ output "mysql_version" {
   value       = oci_mysql_mysql_db_system.main.mysql_version
 }
 
+output "admin_username" {
+  description = "MySQL administrator username"
+  value       = var.admin_username
+}
+
 # =============================================================================
 # Connection Outputs
 # =============================================================================

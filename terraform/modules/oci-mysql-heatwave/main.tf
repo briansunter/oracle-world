@@ -26,6 +26,20 @@ terraform {
   }
 }
 
+resource "terraform_data" "validate_heatwave_options" {
+  input = {
+    enable_heatwave  = var.enable_heatwave
+    enable_lakehouse = var.enable_lakehouse
+  }
+
+  lifecycle {
+    precondition {
+      condition     = !var.enable_lakehouse || var.enable_heatwave
+      error_message = "enable_lakehouse requires enable_heatwave = true"
+    }
+  }
+}
+
 # =============================================================================
 # MySQL Database System (Always Free)
 # =============================================================================
@@ -39,6 +53,8 @@ resource "oci_mysql_mysql_db_system" "main" {
   # Always Free tier shape
   shape_name              = "MySQL.Free"
   data_storage_size_in_gb = 50 # Fixed for free tier
+  # mysql_version is intentionally omitted: Oracle upgrades Always Free DB
+  # systems to the latest supported version during maintenance cycles.
 
   # Admin credentials
   admin_username = var.admin_username
@@ -57,10 +73,9 @@ resource "oci_mysql_mysql_db_system" "main" {
 
   freeform_tags = var.tags
 
-  # Prevent accidental deletion - uncomment to protect from destroy
-  # lifecycle {
-  #   prevent_destroy = true
-  # }
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 # =============================================================================

@@ -42,11 +42,17 @@ runcmd:
   # --- iptables ---
   # OCI Ubuntu images have iptables rules that reject inbound traffic even
   # when the VCN security list allows it. Open the ports we actually use.
+%{ if enable_ssh ~}
+  # The VCN security list controls whether SSH is reachable and from where;
+  # keep the instance rule present so `just ssh-allow` can update only the
+  # security list without recreating the instance.
+  - iptables -C INPUT -p tcp --dport 22 -m state --state NEW -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport 22 -m state --state NEW -j ACCEPT
+%{ endif ~}
 %{ for port in tcp_ports ~}
-  - iptables -I INPUT -p tcp --dport ${port} -m state --state NEW -j ACCEPT
+  - iptables -C INPUT -p tcp --dport ${port} -m state --state NEW -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport ${port} -m state --state NEW -j ACCEPT
 %{ endfor ~}
 %{ for port in udp_ports ~}
-  - iptables -I INPUT -p udp --dport ${port} -j ACCEPT
+  - iptables -C INPUT -p udp --dport ${port} -j ACCEPT 2>/dev/null || iptables -I INPUT -p udp --dport ${port} -j ACCEPT
 %{ endfor ~}
   - netfilter-persistent save
 
@@ -57,20 +63,39 @@ runcmd:
 %{ if enable_block_volume ~}
 
   # --- Block volume: wait for attachment, format, mount ---
-  # Terraform attaches the volume concurrently with instance boot. The
-  # /dev/oracleoci/ symlinks may not exist when cloud-init starts, so we
-  # wait up to 3 minutes for the device to appear. Format if unformatted,
-  # then mount via the fstab entry created by `mounts` above.
+  # Terraform attaches the volume concurrently with instance boot. Discover an
+  # unmounted whole disk under /dev/oracleoci, waiting up to 3 minutes. Never
+  # format a mounted disk or a disk with an existing filesystem unless it has
+  # the expected data label.
   - |
     DEVICE=""
+    NEEDS_FORMAT="false"
     for i in $(seq 1 90); do
-      for dev in /dev/oracleoci/oraclevda /dev/oracleoci/oraclevdb; do
-        [ -b "$dev" ] && DEVICE="$dev" && break 2
+      for dev in /dev/oracleoci/*; do
+        [ -b "$dev" ] || continue
+        realdev="$(readlink -f "$dev" 2>/dev/null || true)"
+        [ -n "$realdev" ] || continue
+        if findmnt -rn -S "$dev" >/dev/null 2>&1 || findmnt -rn -S "$realdev" >/dev/null 2>&1; then
+          continue
+        fi
+        [ "$(lsblk -no TYPE "$dev" 2>/dev/null || true)" = "disk" ] || continue
+        [ -z "$(lsblk -nr -o NAME "$dev" 2>/dev/null | tail -n +2)" ] || continue
+        if blkid "$dev" >/dev/null 2>&1; then
+          [ "$(blkid -s LABEL -o value "$dev" 2>/dev/null || true)" = "data" ] || continue
+          DEVICE="$dev"
+          break 2
+        fi
+        DEVICE="$dev"
+        NEEDS_FORMAT="true"
+        break 2
       done
+      [ -n "$DEVICE" ] && break
       sleep 2
     done
     if [ -n "$DEVICE" ]; then
-      blkid "$DEVICE" >/dev/null 2>&1 || mkfs.ext4 -L data "$DEVICE"
+      if [ "$NEEDS_FORMAT" = "true" ]; then
+        mkfs.ext4 -L data "$DEVICE"
+      fi
       mount -a
     else
       echo "WARNING: block volume device not found after 180s" >&2

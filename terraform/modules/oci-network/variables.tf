@@ -88,8 +88,8 @@ variable "ssh_source_cidr" {
   default     = ""
 
   validation {
-    condition     = var.ssh_source_cidr == "" || can(cidrhost(var.ssh_source_cidr, 0))
-    error_message = "ssh_source_cidr must be empty (disabled) or a valid CIDR block (e.g., 203.0.113.5/32)"
+    condition     = var.ssh_source_cidr == "" || (can(cidrhost(var.ssh_source_cidr, 0)) && can(regex("/32$", var.ssh_source_cidr)))
+    error_message = "ssh_source_cidr must be empty (disabled) or a valid single-IP /32 CIDR (e.g., 203.0.113.5/32)"
   }
 }
 
@@ -109,8 +109,8 @@ variable "additional_tcp_ports" {
   default     = []
 
   validation {
-    condition     = alltrue([for port in var.additional_tcp_ports : port >= 1 && port <= 65535])
-    error_message = "All ports must be between 1 and 65535"
+    condition     = alltrue([for port in var.additional_tcp_ports : port >= 1 && port <= 65535]) && length(var.additional_tcp_ports) == length(distinct(var.additional_tcp_ports)) && !contains(var.additional_tcp_ports, 22)
+    error_message = "TCP ports must be unique, between 1 and 65535, and must not include 22; use ssh_source_cidr for SSH"
   }
 }
 
@@ -120,7 +120,7 @@ variable "additional_udp_ports" {
   default     = []
 
   validation {
-    condition     = alltrue([for port in var.additional_udp_ports : port >= 1 && port <= 65535])
-    error_message = "All ports must be between 1 and 65535"
+    condition     = alltrue([for port in var.additional_udp_ports : port >= 1 && port <= 65535]) && length(var.additional_udp_ports) == length(distinct(var.additional_udp_ports))
+    error_message = "UDP ports must be unique and between 1 and 65535"
   }
 }

@@ -11,6 +11,22 @@ variable "compartment_ocid" {
   description = "OCI compartment OCID (use tenancy OCID for root compartment)"
   type        = string
   # Find with: oci iam compartment list (or use tenancy OCID from ~/.oci/config)
+
+  validation {
+    condition     = can(regex("^ocid1\\.(compartment|tenancy)\\.oc", var.compartment_ocid))
+    error_message = "compartment_ocid must be a valid OCI compartment or tenancy OCID"
+  }
+}
+
+variable "tenancy_ocid" {
+  description = "OCI tenancy OCID used for region discovery and root-scoped policies (optional for backwards compatibility; defaults to compartment_ocid)"
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.tenancy_ocid == "" || can(regex("^ocid1\\.tenancy\\.oc", var.tenancy_ocid))
+    error_message = "tenancy_ocid must be empty or a valid OCI tenancy OCID"
+  }
 }
 
 variable "user_ocid" {
@@ -18,12 +34,21 @@ variable "user_ocid" {
   type        = string
   default     = ""
   # Find with: grep user ~/.oci/config
+
+  validation {
+    condition     = var.user_ocid == "" || can(regex("^ocid1\\.user\\.oc", var.user_ocid))
+    error_message = "user_ocid must be empty or a valid OCI user OCID"
+  }
 }
 
 variable "availability_domain" {
   description = "Availability domain name (e.g., 'QjOL:US-SANJOSE-1-AD-1')"
   type        = string
-  # Find with: oci iam availability-domain list
+
+  validation {
+    condition     = can(regex("^[^:]+:[A-Za-z0-9-]+-AD-[0-9]+$", var.availability_domain))
+    error_message = "availability_domain must look like '<realm>:<REGION>-AD-<number>'"
+  }
 }
 
 # =============================================================================
@@ -50,36 +75,66 @@ variable "vcn_cidr" {
   description = "CIDR block for the VCN"
   type        = string
   default     = "10.0.0.0/16"
+
+  validation {
+    condition     = can(cidrhost(var.vcn_cidr, 0))
+    error_message = "vcn_cidr must be a valid CIDR block"
+  }
 }
 
 variable "subnet_cidr" {
   description = "CIDR block for the public subnet"
   type        = string
   default     = "10.0.0.0/24"
+
+  validation {
+    condition     = can(cidrhost(var.subnet_cidr, 0))
+    error_message = "subnet_cidr must be a valid CIDR block"
+  }
 }
 
 variable "private_subnet_cidr" {
   description = "CIDR block for the private subnet (MySQL)"
   type        = string
   default     = "10.0.1.0/24"
+
+  validation {
+    condition     = can(cidrhost(var.private_subnet_cidr, 0))
+    error_message = "private_subnet_cidr must be a valid CIDR block"
+  }
 }
 
 variable "ssh_source_cidr" {
   description = "CIDR allowed to SSH (port 22). Empty = SSH disabled. Use x.x.x.x/32 for a single IP."
   type        = string
   default     = ""
+
+  validation {
+    condition     = var.ssh_source_cidr == "" || (can(cidrhost(var.ssh_source_cidr, 0)) && can(regex("/32$", var.ssh_source_cidr)))
+    error_message = "ssh_source_cidr must be empty or a valid single-IP /32 CIDR"
+  }
 }
 
 variable "additional_tcp_ports" {
   description = "TCP ports to open in VCN security list and instance iptables (0.0.0.0/0)"
   type        = list(number)
   default     = [80, 443]
+
+  validation {
+    condition     = alltrue([for port in var.additional_tcp_ports : port >= 1 && port <= 65535]) && length(var.additional_tcp_ports) == length(distinct(var.additional_tcp_ports)) && !contains(var.additional_tcp_ports, 22)
+    error_message = "TCP ports must be unique, between 1 and 65535, and must not include 22; use ssh_source_cidr for SSH"
+  }
 }
 
 variable "additional_udp_ports" {
   description = "UDP ports to open in VCN security list and instance iptables (0.0.0.0/0)"
   type        = list(number)
   default     = []
+
+  validation {
+    condition     = alltrue([for port in var.additional_udp_ports : port >= 1 && port <= 65535]) && length(var.additional_udp_ports) == length(distinct(var.additional_udp_ports))
+    error_message = "UDP ports must be unique and between 1 and 65535"
+  }
 }
 
 variable "dns_label" {
@@ -93,21 +148,36 @@ variable "dns_label" {
 # =============================================================================
 
 variable "ocpus" {
-  description = "Number of OCPUs (max 4 for Always Free)"
+  description = "Number of OCPUs (max 2 for the current Always Free A1 entitlement)"
   type        = number
-  default     = 4
+  default     = 2
+
+  validation {
+    condition     = var.ocpus >= 1 && var.ocpus <= 2
+    error_message = "ocpus must be between 1 and 2 for the current Always Free A1 entitlement"
+  }
 }
 
 variable "memory_in_gbs" {
-  description = "Memory in GB (max 24 for Always Free)"
+  description = "Memory in GB (max 12 for the current Always Free A1 entitlement)"
   type        = number
-  default     = 24
+  default     = 12
+
+  validation {
+    condition     = var.memory_in_gbs >= 1 && var.memory_in_gbs <= 12
+    error_message = "memory_in_gbs must be between 1 and 12 GB for the current Always Free A1 entitlement"
+  }
 }
 
 variable "operating_system" {
   description = "Operating system for image lookup"
   type        = string
   default     = "Canonical Ubuntu"
+
+  validation {
+    condition     = contains(["Canonical Ubuntu", "Oracle Linux"], var.operating_system)
+    error_message = "operating_system must be Canonical Ubuntu or Oracle Linux to remain Always Free eligible"
+  }
 }
 
 variable "os_version" {
@@ -124,6 +194,11 @@ variable "boot_volume_size_gb" {
   description = "Boot volume size in GB"
   type        = number
   default     = 50
+
+  validation {
+    condition     = var.boot_volume_size_gb >= 47 && var.boot_volume_size_gb <= 200
+    error_message = "boot_volume_size_gb must be between 47 and 200 GB"
+  }
 }
 
 variable "enable_block_volume" {
@@ -136,6 +211,11 @@ variable "block_volume_size_gb" {
   description = "Block volume size in GB"
   type        = number
   default     = 150
+
+  validation {
+    condition     = var.block_volume_size_gb >= 50 && var.block_volume_size_gb <= 200
+    error_message = "block_volume_size_gb must be between 50 and 200 GB"
+  }
 }
 
 # =============================================================================
@@ -152,6 +232,11 @@ variable "mysql_admin_username" {
   description = "MySQL admin username"
   type        = string
   default     = "admin"
+
+  validation {
+    condition     = can(regex("^[a-zA-Z][a-zA-Z0-9_]*$", var.mysql_admin_username))
+    error_message = "mysql_admin_username must start with a letter and contain only alphanumeric characters and underscores"
+  }
 }
 
 variable "mysql_admin_password" {
@@ -159,6 +244,18 @@ variable "mysql_admin_password" {
   type        = string
   sensitive   = true
   default     = ""
+
+  validation {
+    condition = var.mysql_admin_password == "" || (
+      length(var.mysql_admin_password) >= 8 &&
+      length(var.mysql_admin_password) <= 32 &&
+      can(regex("[A-Z]", var.mysql_admin_password)) &&
+      can(regex("[a-z]", var.mysql_admin_password)) &&
+      can(regex("[0-9]", var.mysql_admin_password)) &&
+      can(regex("[^a-zA-Z0-9]", var.mysql_admin_password))
+    )
+    error_message = "mysql_admin_password must be empty when MySQL is disabled or 8-32 characters with uppercase, lowercase, number, and special character"
+  }
 }
 
 variable "mysql_enable_heatwave" {
@@ -174,11 +271,9 @@ variable "mysql_enable_lakehouse" {
 }
 
 # =============================================================================
-# Object Storage Configuration (Always Free - Paid Account)
-# Paid accounts get 10 GB per tier separately = 30 GB total free:
-#   - 10 GB Standard (hot) - frequently accessed
-#   - 10 GB InfrequentAccess (warm) - auto-tiered after 30+ days no access
-#   - 10 GB Archive (cold) - lifecycle policy after configured days
+# Object Storage Configuration (Always Free-only profile)
+# Keep all Object Storage data, including the remote-state bucket, below the
+# 20 GB combined Always Free-only account limit.
 # =============================================================================
 
 variable "enable_object_storage" {
@@ -287,12 +382,22 @@ variable "alert_email" {
   description = "Email address for budget and monitoring alerts (required when alerts are enabled)"
   type        = string
   default     = ""
+
+  validation {
+    condition     = var.alert_email == "" || can(regex("^[^@,[:space:]]+@[^@,[:space:]]+\\.[^@,[:space:]]+$", var.alert_email))
+    error_message = "alert_email must be empty or a single valid email address"
+  }
 }
 
 variable "budget_amount" {
   description = "Monthly budget amount in USD (0 = alert on any charges)"
   type        = number
   default     = 0
+
+  validation {
+    condition     = var.budget_amount >= 0
+    error_message = "budget_amount must be non-negative"
+  }
 }
 
 # =============================================================================
@@ -309,4 +414,3 @@ variable "state_passphrase" {
     error_message = "state_passphrase must be at least 16 characters. Run ./generate-env.sh to generate one."
   }
 }
-
