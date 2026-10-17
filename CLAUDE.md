@@ -117,7 +117,7 @@ These are the hard limits. This project's defaults are tuned to maximize free re
 
 | Resource | Free Limit | This Project's Default |
 |----------|-----------|----------------------|
-| **ARM Compute (A1.Flex)** | 4 OCPUs, 24 GB RAM total (splittable across up to 4 instances) | 1 instance: 4 OCPUs, 24 GB |
+| **ARM Compute (A1.Flex)** | 2 OCPUs, 12 GB RAM total (splittable across instances) | 1 instance: 2 OCPUs, 12 GB |
 | **AMD Compute (E2.1.Micro)** | 2 instances, 1/8 OCPU + 1 GB each | Not used (shape is selectable) |
 | **Boot + Block Volume** | 200 GB combined, 5 backups | 50 GB boot + 150 GB block = 200 GB |
 | **Object Storage** | 20 GB combined (Always Free account) or 10 GB/tier = 30 GB (paid account) | Off (`enable_object_storage`) |
@@ -174,7 +174,7 @@ terraform/
 - Compute stays in the public subnet because OCI NAT gateways are not free tier — a private-subnet instance couldn't reach the internet for updates
 - Boot volume has a Bronze backup policy (weekly, 4 retained) — fits within 5 free backups
 - Compute shape validation restricts to `VM.Standard.A1.Flex` and `VM.Standard.E2.1.Micro` (both free tier eligible)
-- Variable validations enforce free tier boundaries (OCPUs 1-4, memory 1-24 GB, boot volume 47-200 GB)
+- Variable validations enforce free tier boundaries (OCPUs 1-2, memory 1-12 GB, boot volume 47-200 GB)
 - Cloud-init on first boot opens iptables (OCI Ubuntu blocks inbound by default), hardens SSH, enables unattended upgrades
 
 ## Provider

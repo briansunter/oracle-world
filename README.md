@@ -6,7 +6,7 @@ Terraform/OpenTofu modules for Oracle Cloud Infrastructure (OCI) Always Free tie
 
 | Resource | Spec | Default |
 |----------|------|---------|
-| **Compute** | VM.Standard.A1.Flex — 4 OCPUs, 24 GB RAM (ARM) | On |
+| **Compute** | VM.Standard.A1.Flex — 2 OCPUs, 12 GB RAM (ARM) | On |
 | **Boot Storage** | 50 GB (expandable to 200 GB) + weekly backups | On |
 | **Block Storage** | 150 GB attached volume | On |
 | **MySQL** | 50 GB Always Free HeatWave (private subnet) | Off (`enable_mysql`) |
@@ -108,7 +108,7 @@ Everything works out of the box — you only need to provide 4 values (compartme
 
 | Setting | Default | Override |
 |---------|---------|----------|
-| **Compute** | 4 OCPUs, 24 GB RAM (ARM) | `ocpus`, `memory_in_gbs` |
+| **Compute** | 2 OCPUs, 12 GB RAM (ARM) | `ocpus`, `memory_in_gbs` |
 | **OS** | Ubuntu 24.04 Minimal (aarch64) | `operating_system`, `os_version` |
 | **Storage** | 50 GB boot + 150 GB block at `/data` | `boot_volume_size_gb`, `enable_block_volume` |
 | **Public access** | Enabled — port 443 open | `enable_public_access = false` |
@@ -232,7 +232,7 @@ object_storage_archive_days    = 180
 │  │           ┌──────────┐                              │  │
 │  │           │ ARM      │                              │  │
 │  │           │ Instance │                              │  │
-│  │           │ 4C/24GB  │                              │  │
+│  │           │ 2C/12GB  │                              │  │
 │  │           └────┬─────┘                              │  │
 │  │                │                                    │  │
 │  └────────────────────┼───────────────────────────────┘  │
@@ -295,7 +295,7 @@ just mysql-tunnel
 
 | Resource | Free Limit | Project Default |
 |----------|-----------|----------------|
-| ARM Compute (A1.Flex) | 4 OCPUs, 24 GB RAM | 1 instance: 4 OCPUs, 24 GB |
+| ARM Compute (A1.Flex) | 2 OCPUs, 12 GB RAM | 1 instance: 2 OCPUs, 12 GB |
 | Boot + Block Volume | 200 GB combined, 5 backups | 50 GB boot + 150 GB block |
 | Object Storage | 10 GB/tier = 30 GB (paid account) | Off (`enable_object_storage`) |
 | MySQL HeatWave | 1 DB, 50 GB data + 50 GB backup | Off (`enable_mysql`) |
