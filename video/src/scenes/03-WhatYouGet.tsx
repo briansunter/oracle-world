@@ -8,8 +8,8 @@ import { FloatingParticles } from "../components/FloatingParticles";
 import { GridBackground } from "../components/GridBackground";
 
 const specs = [
-  { value: 4, unit: "OCPU", label: "ARM Compute", color: colors.green },
-  { value: 24, unit: "GB", label: "Memory", color: colors.cyan },
+  { value: 2, unit: "OCPU", label: "ARM Compute", color: colors.green },
+  { value: 12, unit: "GB", label: "Memory", color: colors.cyan },
   { value: 200, unit: "GB", label: "Block Storage", color: colors.blue },
   { value: 50, unit: "GB", label: "MySQL Database", color: colors.purple },
   { value: 10, unit: "TB", label: "Outbound Data", color: colors.amber },

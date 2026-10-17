@@ -61,7 +61,7 @@ export const modules: ModuleNode[] = [
   {
     id: "compute",
     label: "ARM Compute",
-    sublabel: "A1.Flex \u2022 4 OCPU",
+    sublabel: "A1.Flex \u2022 2 OCPU",
     x: 760,
     y: 420,
     width: 220,

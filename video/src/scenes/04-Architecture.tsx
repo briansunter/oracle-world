@@ -299,7 +299,7 @@ const LandscapeDiagram: React.FC<{ frame: number; fps: number }> = ({ frame, fps
       <Region x={PUB.x} y={PUB.y} w={PUB.w} h={PUB.h} color={colors.cyan} label="Public Subnet  10.0.1.0/24" dashed delay={10} frame={frame} fps={fps} />
       <Region x={PRIV.x} y={PRIV.y} w={PRIV.w} h={PRIV.h} color={colors.purple} label="Private Subnet  10.0.2.0/24" badge="Optional" dashed delay={12} frame={frame} fps={fps} />
 
-      <Box cx={420} cy={240} w={220} h={70} color={colors.green} label="ARM Compute" sublabel="A1.Flex | 4 OCPU | 24 GB" delay={18} frame={frame} fps={fps} />
+      <Box cx={420} cy={240} w={220} h={70} color={colors.green} label="ARM Compute" sublabel="A1.Flex | 2 OCPU | 12 GB" delay={18} frame={frame} fps={fps} />
       <Box cx={420} cy={380} w={190} h={65} color={colors.green} label="Block Storage" sublabel="150 GB | /data" delay={24} frame={frame} fps={fps} />
       <Box cx={1125} cy={240} w={220} h={70} color={colors.purple} label="MySQL HeatWave" sublabel="50 GB | Always Free" delay={30} frame={frame} fps={fps} />
       <Box cx={1125} cy={380} w={220} h={65} color={colors.pink} label="Object Storage" sublabel="S3-Compatible | 20 GB" badge="Optional" delay={36} frame={frame} fps={fps} />
@@ -355,7 +355,7 @@ const VerticalDiagram: React.FC<{ frame: number; fps: number }> = ({ frame, fps 
       <Region x={PRIV.x} y={PRIV.y} w={PRIV.w} h={PRIV.h} color={colors.purple} label="Private Subnet  10.0.2.0/24" badge="Optional" dashed delay={12} frame={frame} fps={fps} fontSize={rs} />
 
       {/* Compute */}
-      <Box cx={cx} cy={270} w={bw} h={bh} color={colors.green} label="ARM Compute" sublabel="A1.Flex | 4 OCPU | 24 GB" delay={18} frame={frame} fps={fps} labelSize={ls} subSize={ss} />
+      <Box cx={cx} cy={270} w={bw} h={bh} color={colors.green} label="ARM Compute" sublabel="A1.Flex | 2 OCPU | 12 GB" delay={18} frame={frame} fps={fps} labelSize={ls} subSize={ss} />
 
       {/* Block Storage */}
       <Box cx={cx} cy={430} w={bw} h={bh} color={colors.green} label="Block Storage" sublabel="150 GB | /data" delay={24} frame={frame} fps={fps} labelSize={ls} subSize={ss} />
